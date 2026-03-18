@@ -4,3 +4,4 @@ dist/
 *.vsix
 *.visx
 .env
+.DS_Store
