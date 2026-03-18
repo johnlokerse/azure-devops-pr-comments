@@ -1,0 +1,112 @@
+{
+  "name": "azure-devops-pr-comments",
+  "displayName": "Azure DevOps PR Comments",
+  "description": "Show Azure DevOps pull request comments inline in VS Code",
+  "version": "0.1.0",
+  "publisher": "johnlokerse",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "keywords": ["azure devops", "pull request", "code review", "comments"],
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "azurePrComments.signIn",
+        "title": "Sign In to Azure DevOps",
+        "category": "Azure PR Comments"
+      },
+      {
+        "command": "azurePrComments.signOut",
+        "title": "Sign Out of Azure DevOps",
+        "category": "Azure PR Comments"
+      },
+      {
+        "command": "azurePrComments.refresh",
+        "title": "Refresh PR Comments",
+        "category": "Azure PR Comments",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "azurePrComments.diagnose",
+        "title": "Show Diagnostics",
+        "category": "Azure PR Comments"
+      },
+      {
+        "command": "azurePrComments.resolveThread",
+        "title": "Resolve Thread",
+        "category": "Azure PR Comments"
+      },
+      {
+        "command": "azurePrComments.reopenThread",
+        "title": "Reopen Thread",
+        "category": "Azure PR Comments"
+      }
+    ],
+    "menus": {
+      "comments/commentThread/title": [
+        {
+          "command": "azurePrComments.resolveThread",
+          "group": "inline",
+          "when": "commentThread =~ /open/"
+        },
+        {
+          "command": "azurePrComments.reopenThread",
+          "group": "inline",
+          "when": "commentThread =~ /resolved/"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Azure PR Comments",
+      "properties": {
+        "azureDevOpsPrComments.organizationUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Override auto-detected Azure DevOps organization URL (e.g. https://dev.azure.com/myorg)"
+        },
+        "azureDevOpsPrComments.project": {
+          "type": "string",
+          "default": "",
+          "description": "Override auto-detected Azure DevOps project name"
+        },
+        "azureDevOpsPrComments.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 0,
+          "description": "Auto-refresh interval in seconds (0 to disable)"
+        },
+        "azureDevOpsPrComments.showResolvedThreads": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show resolved comment threads"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build:prod",
+    "build": "node esbuild.js",
+    "build:prod": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts",
+    "pretest": "npm run build && npm run lint",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "azure-devops-node-api": "^14.0.0"
+  }
+}
