@@ -8,15 +8,16 @@ A Visual Studio Code extension that shows Azure DevOps pull request comments **i
 - **Microsoft Entra ID sign-in**: Authenticate securely with your work account — no Personal Access Tokens needed
 - **Auto-detection**: Automatically detects your Azure DevOps organization, project, and repository from your git remote URL
 - **Interactive**: Reply to threads and resolve/reopen them directly from the editor
-- **Status bar**: Shows the current PR number and open comment count at a glance
-- **Auto-refresh**: Automatically refreshes comments in the background (configurable interval)
+- **Status bar**: Shows the current PR number and open comment count at a glance, with dedicated refresh and Azure DevOps buttons
+- **Manual refresh**: Comments update only when you use the refresh command or status bar button
 
 ## Getting Started
 
 1. Open a workspace that is cloned from an Azure DevOps repository
 2. Run **Azure PR Comments: Sign In** from the Command Palette (`Ctrl+Shift+P`)
 3. Sign in with your Microsoft/Entra ID account in the browser
-4. PR comments for your current branch will appear inline in the editor
+4. Use the status bar refresh button, or run **Azure PR Comments: Refresh PR Comments**
+5. PR comments for your current branch will appear inline in the editor
 
 ## Requirements
 
@@ -30,7 +31,6 @@ A Visual Studio Code extension that shows Azure DevOps pull request comments **i
 |---|---|---|
 | `azureDevOpsPrComments.organizationUrl` | *(auto-detect)* | Override the Azure DevOps organization URL |
 | `azureDevOpsPrComments.project` | *(auto-detect)* | Override the Azure DevOps project name |
-| `azureDevOpsPrComments.refreshIntervalSeconds` | `60` | Auto-refresh interval in seconds (0 to disable) |
 | `azureDevOpsPrComments.showResolvedThreads` | `false` | Show resolved/closed comment threads |
 
 ## Commands
@@ -40,6 +40,7 @@ A Visual Studio Code extension that shows Azure DevOps pull request comments **i
 | `Azure PR Comments: Sign In` | Sign in to Azure DevOps via Entra ID |
 | `Azure PR Comments: Sign Out` | Sign out |
 | `Azure PR Comments: Refresh PR Comments` | Manually refresh comments |
+| `Azure PR Comments: Open in Azure DevOps` | Open the current pull request in Azure DevOps |
 
 ## Supported Remote URL Formats
 

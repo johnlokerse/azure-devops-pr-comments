@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { PullRequestThread, PullRequestComment } from '../api/types.js';
+import { isResolvedThreadStatus, type PullRequestThread, type PullRequestComment } from '../api/types.js';
 
 export interface MappedThread {
   thread: PullRequestThread;
@@ -21,7 +21,7 @@ export class ThreadMapper {
       if (!thread.threadContext?.filePath) {
         continue;
       }
-      if (!showResolved && this.isResolved(thread)) {
+      if (!showResolved && isResolvedThreadStatus(thread.status)) {
         continue;
       }
       if (thread.comments.length === 0) {
@@ -66,10 +66,6 @@ export class ThreadMapper {
     // across iterations, while VS Code always renders the gutter marker on the
     // line-based range.
     return new vscode.Range(startLine, 0, endLine, 0);
-  }
-
-  private isResolved(thread: PullRequestThread): boolean {
-    return thread.status !== 'active' && thread.status !== 'pending';
   }
 }
 

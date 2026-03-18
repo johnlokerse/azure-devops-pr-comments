@@ -188,8 +188,38 @@ export class AzureDevOpsClient {
     };
   }
 
-  private mapAdoThreadStatus(status: number | undefined): ThreadStatus {
+  private mapAdoThreadStatus(status: number | string | undefined): ThreadStatus {
+    if (typeof status === 'string') {
+      const normalized = status.trim();
+      if (!normalized) {
+        return 'unknown';
+      }
+
+      const numericStatus = Number(normalized);
+      if (!Number.isNaN(numericStatus)) {
+        return this.mapAdoThreadStatus(numericStatus);
+      }
+
+      switch (normalized.toLowerCase()) {
+        case 'unknown': return 'unknown';
+        case 'active': return 'active';
+        case 'fixed': return 'fixed';
+        case 'wontfix':
+        case "won't fix":
+        case "won'tfix":
+        case 'wont fix':
+          return 'wontFix';
+        case 'closed': return 'closed';
+        case 'bydesign':
+        case 'by design':
+          return 'byDesign';
+        case 'pending': return 'pending';
+        default: return 'unknown';
+      }
+    }
+
     switch (status) {
+      case 0: return 'unknown';
       case 1: return 'active';
       case 2: return 'fixed';
       case 3: return 'wontFix';
@@ -235,7 +265,7 @@ interface RawPullRequest {
 
 interface RawThread {
   id: number;
-  status?: number;
+  status?: number | string;
   isDeleted?: boolean;
   threadContext?: {
     filePath?: string;

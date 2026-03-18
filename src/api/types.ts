@@ -33,6 +33,10 @@ export interface PullRequestThread {
 
 export type ThreadStatus = 'active' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'pending' | 'unknown';
 
+export function isResolvedThreadStatus(status: ThreadStatus): boolean {
+  return status === 'fixed' || status === 'wontFix' || status === 'closed' || status === 'byDesign';
+}
+
 export interface ThreadContext {
   filePath: string;
   rightFileStart?: FilePosition;

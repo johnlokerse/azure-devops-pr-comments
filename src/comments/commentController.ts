@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { AzureDevOpsClient } from '../api/azureDevOpsClient.js';
-import type { PullRequest, PullRequestThread } from '../api/types.js';
+import { isResolvedThreadStatus, type PullRequest, type PullRequestThread } from '../api/types.js';
 import { ThreadMapper, buildCommentBody, formatDate } from './threadMapper.js';
 
 const CONTROLLER_ID = 'azurePrComments';
@@ -49,9 +49,9 @@ export class PrCommentController implements vscode.Disposable {
 
       const vsThread = this._controller.createCommentThread(uri, range, vsComments);
       vsThread.label = `Thread #${thread.id}`;
-      vsThread.state = thread.status === 'active' || thread.status === 'pending'
-        ? vscode.CommentThreadState.Unresolved
-        : vscode.CommentThreadState.Resolved;
+      vsThread.state = isResolvedThreadStatus(thread.status)
+        ? vscode.CommentThreadState.Resolved
+        : vscode.CommentThreadState.Unresolved;
       vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
       vsThread.contextValue = vsThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
       vsThread.canReply = true;

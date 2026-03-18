@@ -1,14 +1,18 @@
 import * as vscode from 'vscode';
 import { AuthProvider } from './auth/authProvider.js';
+import { isResolvedThreadStatus } from './api/types.js';
 import { RepositoryDetector } from './git/repositoryDetector.js';
 import { AzureDevOpsApiError, AzureDevOpsClient } from './api/azureDevOpsClient.js';
 import { PrCommentController } from './comments/commentController.js';
-import { ThreadMapper, describeThreadLocation } from './comments/threadMapper.js';
+import { ThreadMapper, describeThreadLocation, type MappedThread } from './comments/threadMapper.js';
 import { StatusBarManager } from './ui/statusBar.js';
 
-let refreshTimer: ReturnType<typeof setInterval> | undefined;
 let commentController: PrCommentController | undefined;
 let statusBar: StatusBarManager | undefined;
+let lastRenderedThreadsKey: string | undefined;
+let currentPullRequestUrl: string | undefined;
+let refreshInProgress = false;
+let refreshQueued = false;
 
 export function activate(context: vscode.ExtensionContext): void {
   const auth = new AuthProvider(context.globalState);
@@ -16,6 +20,7 @@ export function activate(context: vscode.ExtensionContext): void {
   commentController = new PrCommentController();
   statusBar = new StatusBarManager();
   const output = vscode.window.createOutputChannel('Azure DevOps PR Comments');
+  statusBar.showIdle();
 
   context.subscriptions.push(commentController, statusBar, output);
 
@@ -25,16 +30,36 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('azurePrComments.signIn', async () => {
       // forceNewSession ensures the user can pick the right account
       await auth.signIn(true);
-      await refresh();
+      lastRenderedThreadsKey = undefined;
+      currentPullRequestUrl = undefined;
+      statusBar?.showIdle();
     }),
 
     vscode.commands.registerCommand('azurePrComments.signOut', async () => {
       await auth.signOut();
+      refreshQueued = false;
+      lastRenderedThreadsKey = undefined;
+      currentPullRequestUrl = undefined;
       commentController?.clearThreads();
       statusBar?.showNotConnected();
     }),
 
     vscode.commands.registerCommand('azurePrComments.refresh', () => refresh()),
+
+    vscode.commands.registerCommand('azurePrComments.openInAzureDevOps', async () => {
+      if (!currentPullRequestUrl) {
+        vscode.window.showInformationMessage(
+          'Azure PR Comments: refresh the current pull request first, then use Open in Azure DevOps.'
+        );
+        return;
+      }
+
+      await vscode.env.openExternal(vscode.Uri.parse(currentPullRequestUrl));
+    }),
+
+    vscode.commands.registerCommand('azurePrComments.replyToThread', async (reply: vscode.CommentReply) => {
+      await commentController?.handleReply(reply);
+    }),
 
     vscode.commands.registerCommand('azurePrComments.diagnose', async () => {
       const session = await auth.getSession(false);
@@ -111,138 +136,136 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // ── Auto-refresh on branch change ─────────────────────────────────────────
-
-  const gitExtension = vscode.extensions.getExtension('vscode.git');
-  if (gitExtension) {
-    if (!gitExtension.isActive) {
-      gitExtension.activate().then(() => watchBranchChanges(context, repoDetector, auth, refresh));
-    } else {
-      watchBranchChanges(context, repoDetector, auth, refresh);
-    }
-  }
-
-  // ── Initial load ──────────────────────────────────────────────────────────
-
-  refresh();
-  setupRefreshTimer(context, refresh);
-
-  // Re-setup timer when config changes
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('azureDevOpsPrComments.refreshIntervalSeconds')) {
-        setupRefreshTimer(context, refresh);
-      }
-      if (e.affectsConfiguration('azureDevOpsPrComments')) {
-        void refresh();
-      }
-    }),
-    vscode.window.onDidChangeActiveTextEditor(() => {
-      void refresh();
-    }),
-    vscode.workspace.onDidOpenTextDocument(() => {
-      void refresh();
-    })
-  );
-
   // ── Core refresh function ─────────────────────────────────────────────────
 
   async function refresh(): Promise<void> {
-    statusBar?.showLoading();
-    output.clear();
-    output.appendLine('Refreshing Azure DevOps PR comments...');
-
-    // Try to get a session without prompting the user
-    const session = await auth.getSession(false);
-    if (!session) {
-      output.appendLine('No cached Azure DevOps session found.');
-      statusBar?.showNotConnected();
+    if (refreshInProgress) {
+      refreshQueued = true;
       return;
     }
-    output.appendLine(`Signed in as: ${session.account.label}`);
-    output.appendLine(`Tenant ID: ${auth.getAccountTenantId(session) ?? '(unknown)'}`);
-    output.appendLine(`Consumer MSA account: ${auth.isConsumerMicrosoftAccount(session) ? 'yes' : 'no'}`);
-
-    const repo = await repoDetector.detect();
-    if (!repo) {
-      output.appendLine('No Azure DevOps repository detected in this workspace.');
-      statusBar?.hide();
-      return;
-    }
-    output.appendLine(`Repository: ${repo.organizationUrl} / ${repo.project} / ${repo.repo}`);
-
-    const branch = await repoDetector.getCurrentBranch();
-    if (!branch) {
-      output.appendLine('Could not detect the current branch.');
-      statusBar?.showNoPullRequest();
-      return;
-    }
-    output.appendLine(`Branch: ${branch}`);
-
-    const client = new AzureDevOpsClient(repo, () => auth.getToken());
 
     try {
-      const pr = await getPullRequestWithRetry(client, repo, branch, output);
-      if (!pr) {
-        output.appendLine('No active PR found for the current branch.');
-        statusBar?.showNoPullRequest();
+      refreshInProgress = true;
+
+      statusBar?.showLoading();
+      output.clear();
+      output.appendLine('Refreshing Azure DevOps PR comments...');
+
+      // Try to get a session without prompting the user
+      const session = await auth.getSession(false);
+      if (!session) {
+        output.appendLine('No cached Azure DevOps session found.');
+        lastRenderedThreadsKey = undefined;
+        currentPullRequestUrl = undefined;
         commentController?.clearThreads();
-        return;
-      }
-      output.appendLine(`PR: #${pr.pullRequestId} ${pr.title}`);
-
-      const config = vscode.workspace.getConfiguration('azureDevOpsPrComments');
-      const showResolved = config.get<boolean>('showResolvedThreads', false);
-
-      const threads = await client.getPullRequestThreads(pr.pullRequestId);
-      output.appendLine(`Fetched threads: ${threads.length}`);
-      for (const thread of threads) {
-        output.appendLine(`- ${describeThreadLocation(thread)} (${thread.comments.length} comments)`);
-      }
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
-      if (!workspaceRoot) {
-        output.appendLine('No workspace root found.');
-        return;
-      }
-
-      const mapper = new ThreadMapper(workspaceRoot);
-      const mappedThreads = mapper.mapThreads(threads, showResolved);
-      output.appendLine(`Mapped threads: ${mappedThreads.length}`);
-      for (const mappedThread of mappedThreads) {
-        output.appendLine(`  -> ${mappedThread.uri.fsPath}:${mappedThread.range.start.line + 1}`);
-      }
-
-      await commentController?.renderThreads(pr, threads, client, workspaceRoot, showResolved);
-      output.appendLine('Rendered comment threads in VS Code.');
-
-      const activeThreadCount = threads.filter(
-        (t) => t.status === 'active' || t.status === 'pending'
-      ).length;
-
-      statusBar?.showPullRequest(pr, activeThreadCount);
-    } catch (err) {
-      const msg = String(err);
-      output.appendLine(`Refresh failed: ${msg}`);
-      if (msg.includes('VS403363') && auth.isConsumerMicrosoftAccount(session)) {
-        vscode.window.showErrorMessage(
-          'Azure PR Comments: this signed-in Microsoft account is a personal/consumer account. Azure DevOps Entra OAuth for this resource does not natively support MSA users, even if the browser session works. Use a work or school account for the extension.'
-        );
-        statusBar?.showAccessDenied();
-      } else if (msg.includes('VS403363')) {
-        vscode.window.showErrorMessage(
-          'Azure PR Comments: Azure DevOps rejected the current Microsoft account. The extension needs a tenant-specific work or school token for this org.'
-        );
-        statusBar?.showAccessDenied();
-      } else if (msg.includes('TF400813')) {
-        vscode.window.showErrorMessage(`Azure PR Comments: ${msg}`);
-        statusBar?.showAccessDenied();
-      } else if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
-        client.invalidateClient();
-        auth.clearCachedSession();
         statusBar?.showNotConnected();
-      } else {
-        vscode.window.showErrorMessage(`Azure PR Comments: ${msg}`);
+        return;
+      }
+      output.appendLine(`Signed in as: ${session.account.label}`);
+      output.appendLine(`Tenant ID: ${auth.getAccountTenantId(session) ?? '(unknown)'}`);
+      output.appendLine(`Consumer MSA account: ${auth.isConsumerMicrosoftAccount(session) ? 'yes' : 'no'}`);
+
+      const repo = await repoDetector.detect();
+      if (!repo) {
+        output.appendLine('No Azure DevOps repository detected in this workspace.');
+        lastRenderedThreadsKey = undefined;
+        currentPullRequestUrl = undefined;
+        commentController?.clearThreads();
+        statusBar?.hide();
+        return;
+      }
+      output.appendLine(`Repository: ${repo.organizationUrl} / ${repo.project} / ${repo.repo}`);
+
+      const branch = await repoDetector.getCurrentBranch();
+      if (!branch) {
+        output.appendLine('Could not detect the current branch.');
+        lastRenderedThreadsKey = undefined;
+        currentPullRequestUrl = undefined;
+        commentController?.clearThreads();
         statusBar?.showNoPullRequest();
+        return;
+      }
+      output.appendLine(`Branch: ${branch}`);
+
+      const client = new AzureDevOpsClient(repo, () => auth.getToken());
+
+      try {
+        const pr = await getPullRequestWithRetry(client, repo, branch, output);
+        if (!pr) {
+          output.appendLine('No active PR found for the current branch.');
+          statusBar?.showNoPullRequest();
+          lastRenderedThreadsKey = undefined;
+          currentPullRequestUrl = undefined;
+          commentController?.clearThreads();
+          return;
+        }
+        output.appendLine(`PR: #${pr.pullRequestId} ${pr.title}`);
+        currentPullRequestUrl = buildPullRequestUrl(repo, pr.pullRequestId);
+
+        const config = vscode.workspace.getConfiguration('azureDevOpsPrComments');
+        const showResolved = config.get<boolean>('showResolvedThreads', false);
+
+        const threads = await client.getPullRequestThreads(pr.pullRequestId);
+        output.appendLine(`Fetched threads: ${threads.length}`);
+        for (const thread of threads) {
+          output.appendLine(`- ${describeThreadLocation(thread)} (${thread.comments.length} comments)`);
+        }
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+        if (!workspaceRoot) {
+          output.appendLine('No workspace root found.');
+          return;
+        }
+
+        const mapper = new ThreadMapper(workspaceRoot);
+        const mappedThreads = mapper.mapThreads(threads, showResolved);
+        output.appendLine(`Mapped threads: ${mappedThreads.length}`);
+        for (const mappedThread of mappedThreads) {
+          output.appendLine(`  -> ${mappedThread.uri.fsPath}:${mappedThread.range.start.line + 1}`);
+        }
+
+        const renderedThreadsKey = buildRenderedThreadsKey(pr.pullRequestId, workspaceRoot, showResolved, mappedThreads);
+        if (renderedThreadsKey !== lastRenderedThreadsKey) {
+          await commentController?.renderThreads(pr, threads, client, workspaceRoot, showResolved);
+          lastRenderedThreadsKey = renderedThreadsKey;
+          output.appendLine('Rendered comment threads in VS Code.');
+        } else {
+          output.appendLine('Threads unchanged; skipped re-render.');
+        }
+
+        const activeThreadCount = threads.filter((t) => !isResolvedThreadStatus(t.status)).length;
+
+        statusBar?.showPullRequest(pr, activeThreadCount);
+      } catch (err) {
+        const msg = String(err);
+        currentPullRequestUrl = undefined;
+        output.appendLine(`Refresh failed: ${msg}`);
+        if (msg.includes('VS403363') && auth.isConsumerMicrosoftAccount(session)) {
+          vscode.window.showErrorMessage(
+            'Azure PR Comments: this signed-in Microsoft account is a personal/consumer account. Azure DevOps Entra OAuth for this resource does not natively support MSA users, even if the browser session works. Use a work or school account for the extension.'
+          );
+          statusBar?.showAccessDenied();
+        } else if (msg.includes('VS403363')) {
+          vscode.window.showErrorMessage(
+            'Azure PR Comments: Azure DevOps rejected the current Microsoft account. The extension needs a tenant-specific work or school token for this org.'
+          );
+          statusBar?.showAccessDenied();
+        } else if (msg.includes('TF400813')) {
+          vscode.window.showErrorMessage(`Azure PR Comments: ${msg}`);
+          statusBar?.showAccessDenied();
+        } else if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
+          client.invalidateClient();
+          auth.clearCachedSession();
+          statusBar?.showNotConnected();
+        } else {
+          vscode.window.showErrorMessage(`Azure PR Comments: ${msg}`);
+          statusBar?.showNoPullRequest();
+        }
+      }
+    } finally {
+      refreshInProgress = false;
+      if (refreshQueued) {
+        refreshQueued = false;
+        void refresh();
       }
     }
   }
@@ -280,54 +303,42 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 }
 
-function watchBranchChanges(
-  context: vscode.ExtensionContext,
-  repoDetector: RepositoryDetector,
-  _auth: AuthProvider,
-  refresh: () => Promise<void>
-): void {
-  const gitExtension = vscode.extensions.getExtension('vscode.git');
-  if (!gitExtension) {
-    return;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gitApi = gitExtension.exports.getAPI(1) as any;
-  if (!gitApi?.repositories?.length) {
-    return;
-  }
-
-  const repo = gitApi.repositories[0];
-  context.subscriptions.push(
-    repo.state.onDidChange(async () => {
-      const branch = await repoDetector.getCurrentBranch();
-      if (branch) {
-        await refresh();
-      }
-    })
-  );
+function buildRenderedThreadsKey(
+  pullRequestId: number,
+  workspaceRoot: vscode.Uri,
+  showResolved: boolean,
+  mappedThreads: MappedThread[]
+): string {
+  return JSON.stringify({
+    pullRequestId,
+    workspaceRoot: workspaceRoot.toString(),
+    showResolved,
+    threads: mappedThreads.map(({ thread, uri, range }) => ({
+      id: thread.id,
+      status: thread.status,
+      uri: uri.toString(),
+      range: {
+        start: { line: range.start.line, character: range.start.character },
+        end: { line: range.end.line, character: range.end.character },
+      },
+      comments: thread.comments.map((comment) => ({
+        id: comment.id,
+        content: comment.content,
+        publishedDate: comment.publishedDate,
+        lastUpdatedDate: comment.lastUpdatedDate,
+        isDeleted: comment.isDeleted ?? false,
+      })),
+    })),
+  });
 }
 
-function setupRefreshTimer(
-  context: vscode.ExtensionContext,
-  refresh: () => Promise<void>
-): void {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = undefined;
-  }
-
-  const config = vscode.workspace.getConfiguration('azureDevOpsPrComments');
-  const intervalSeconds = config.get<number>('refreshIntervalSeconds', 60);
-
-  if (intervalSeconds > 0) {
-    refreshTimer = setInterval(() => refresh(), intervalSeconds * 1000);
-    context.subscriptions.push({ dispose: () => { if (refreshTimer) { clearInterval(refreshTimer); } } });
-  }
+function buildPullRequestUrl(
+  repo: { project: string; repo: string; organizationUrl: string },
+  pullRequestId: number
+): string {
+  const organizationUrl = repo.organizationUrl.replace(/\/+$/, '');
+  return `${organizationUrl}/${encodeURIComponent(repo.project)}/_git/${encodeURIComponent(repo.repo)}/pullrequest/${pullRequestId}`;
 }
 
 export function deactivate(): void {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-  }
 }

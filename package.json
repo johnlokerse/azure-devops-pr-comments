@@ -32,6 +32,18 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "azurePrComments.openInAzureDevOps",
+        "title": "Open in Azure DevOps",
+        "category": "Azure PR Comments",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "azurePrComments.replyToThread",
+        "title": "Reply",
+        "category": "Azure PR Comments",
+        "enablement": "!commentIsEmpty"
+      },
+      {
         "command": "azurePrComments.diagnose",
         "title": "Show Diagnostics",
         "category": "Azure PR Comments"
@@ -48,6 +60,19 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "azurePrComments.replyToThread",
+          "when": "false"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "azurePrComments.replyToThread",
+          "group": "inline",
+          "when": "commentController == azurePrComments && !commentThreadIsEmpty"
+        }
+      ],
       "comments/commentThread/title": [
         {
           "command": "azurePrComments.resolveThread",
@@ -73,12 +98,6 @@
           "type": "string",
           "default": "",
           "description": "Override auto-detected Azure DevOps project name"
-        },
-        "azureDevOpsPrComments.refreshIntervalSeconds": {
-          "type": "number",
-          "default": 60,
-          "minimum": 0,
-          "description": "Auto-refresh interval in seconds (0 to disable)"
         },
         "azureDevOpsPrComments.showResolvedThreads": {
           "type": "boolean",
