@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('azurePrComments.openInAzureDevOps', async () => {
       if (!currentPullRequestUrl) {
         vscode.window.showInformationMessage(
-          'Azure PR Comments: refresh the current pull request first, then use Open in Azure DevOps.'
+          'Azure DevOps PR Comments: refresh the current pull request first, then use Open in Azure DevOps.'
         );
         return;
       }
@@ -119,7 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const msg = lines.join('\n');
       const copy = 'Copy to clipboard';
       const choice = await vscode.window.showInformationMessage(
-        `Azure PR Comments — Diagnostics\n\n${lines.join('\n')}`,
+        `Azure DevOps PR Comments — Diagnostics\n\n${lines.join('\n')}`,
         copy
       );
       if (choice === copy) {
@@ -241,23 +241,23 @@ export function activate(context: vscode.ExtensionContext): void {
         output.appendLine(`Refresh failed: ${msg}`);
         if (msg.includes('VS403363') && auth.isConsumerMicrosoftAccount(session)) {
           vscode.window.showErrorMessage(
-            'Azure PR Comments: this signed-in Microsoft account is a personal/consumer account. Azure DevOps Entra OAuth for this resource does not natively support MSA users, even if the browser session works. Use a work or school account for the extension.'
+            'Azure DevOps PR Comments: this signed-in Microsoft account is a personal/consumer account. Azure DevOps Entra OAuth for this resource does not natively support MSA users, even if the browser session works. Use a work or school account for the extension.'
           );
           statusBar?.showAccessDenied();
         } else if (msg.includes('VS403363')) {
           vscode.window.showErrorMessage(
-            'Azure PR Comments: Azure DevOps rejected the current Microsoft account. The extension needs a tenant-specific work or school token for this org.'
+            'Azure DevOps PR Comments: Azure DevOps rejected the current Microsoft account. The extension needs a tenant-specific work or school token for this org.'
           );
           statusBar?.showAccessDenied();
         } else if (msg.includes('TF400813')) {
-          vscode.window.showErrorMessage(`Azure PR Comments: ${msg}`);
+          vscode.window.showErrorMessage(`Azure DevOps PR Comments: ${msg}`);
           statusBar?.showAccessDenied();
         } else if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
           client.invalidateClient();
           auth.clearCachedSession();
           statusBar?.showNotConnected();
         } else {
-          vscode.window.showErrorMessage(`Azure PR Comments: ${msg}`);
+          vscode.window.showErrorMessage(`Azure DevOps PR Comments: ${msg}`);
           statusBar?.showNoPullRequest();
         }
       }

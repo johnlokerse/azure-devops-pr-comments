@@ -18,45 +18,45 @@
       {
         "command": "azurePrComments.signIn",
         "title": "Sign In to Azure DevOps",
-        "category": "Azure PR Comments"
+        "category": "Azure DevOps PR Comments"
       },
       {
         "command": "azurePrComments.signOut",
         "title": "Sign Out of Azure DevOps",
-        "category": "Azure PR Comments"
+        "category": "Azure DevOps PR Comments"
       },
       {
         "command": "azurePrComments.refresh",
         "title": "Refresh PR Comments",
-        "category": "Azure PR Comments",
+        "category": "Azure DevOps PR Comments",
         "icon": "$(refresh)"
       },
       {
         "command": "azurePrComments.openInAzureDevOps",
         "title": "Open in Azure DevOps",
-        "category": "Azure PR Comments",
+        "category": "Azure DevOps PR Comments",
         "icon": "$(link-external)"
       },
       {
         "command": "azurePrComments.replyToThread",
         "title": "Reply",
-        "category": "Azure PR Comments",
+        "category": "Azure DevOps PR Comments",
         "enablement": "!commentIsEmpty"
       },
       {
         "command": "azurePrComments.diagnose",
         "title": "Show Diagnostics",
-        "category": "Azure PR Comments"
+        "category": "Azure DevOps PR Comments"
       },
       {
         "command": "azurePrComments.resolveThread",
         "title": "Resolve Thread",
-        "category": "Azure PR Comments"
+        "category": "Azure DevOps PR Comments"
       },
       {
         "command": "azurePrComments.reopenThread",
         "title": "Reopen Thread",
-        "category": "Azure PR Comments"
+        "category": "Azure DevOps PR Comments"
       }
     ],
     "menus": {
@@ -87,7 +87,7 @@
       ]
     },
     "configuration": {
-      "title": "Azure PR Comments",
+      "title": "Azure DevOps PR Comments",
       "properties": {
         "azureDevOpsPrComments.organizationUrl": {
           "type": "string",
@@ -112,9 +112,7 @@
     "build": "node esbuild.js",
     "build:prod": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
-    "lint": "eslint src --ext ts",
-    "pretest": "npm run build && npm run lint",
-    "test": "node ./out/test/runTest.js"
+    "lint": "eslint src --ext ts"
   },
   "devDependencies": {
     "@types/node": "^20.x",

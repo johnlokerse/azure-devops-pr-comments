@@ -1,58 +1,59 @@
 # Azure DevOps PR Comments
 
-A Visual Studio Code extension that shows Azure DevOps pull request comments **inline in your editor** — so you can read, reply to, and resolve review threads without leaving VS Code.
+This extension shows Azure DevOps pull request comment threads inline in VS Code.
 
-## Features
+It is meant for working with an existing pull request from your local branch. You can load the current PR, read file-level review comments in the editor, reply to a thread, resolve or reopen a thread, and open the PR in Azure DevOps.
 
-- **Inline comments**: PR review threads appear as annotations on the exact lines they reference
-- **Microsoft Entra ID sign-in**: Authenticate securely with your work account — no Personal Access Tokens needed
-- **Auto-detection**: Automatically detects your Azure DevOps organization, project, and repository from your git remote URL
-- **Interactive**: Reply to threads and resolve/reopen them directly from the editor
-- **Status bar**: Shows the current PR number and open comment count at a glance, with dedicated refresh and Azure DevOps buttons
-- **Manual refresh**: Comments update only when you use the refresh command or status bar button
+## What it does
 
-## Getting Started
+- Shows file-level PR comment threads on the lines they belong to
+- Lets you reply to an existing thread from VS Code
+- Lets you resolve or reopen a thread
+- Adds status bar buttons for manual refresh and opening the PR in Azure DevOps
 
-1. Open a workspace that is cloned from an Azure DevOps repository
-2. Run **Azure PR Comments: Sign In** from the Command Palette (`Ctrl+Shift+P`)
-3. Sign in with your Microsoft/Entra ID account in the browser
-4. Use the status bar refresh button, or run **Azure PR Comments: Refresh PR Comments**
-5. PR comments for your current branch will appear inline in the editor
+## How to use it
+
+1. Open a repository that is cloned from Azure DevOps Services.
+2. Run **Azure DevOps PR Comments: Sign In** from the Command Palette.
+3. Sign in with your Microsoft/Entra ID work account.
+4. Click the refresh button in the status bar, or run **Azure DevOps PR Comments: Refresh PR Comments**.
+5. If the current branch has an active pull request, the related file-level threads will appear in the editor.
 
 ## Requirements
 
 - VS Code 1.85 or later
-- A repository cloned from Azure DevOps Services (`dev.azure.com`)
-- A Microsoft/Entra ID account with access to the Azure DevOps organization
+- A repository hosted in Azure DevOps Services (`dev.azure.com`)
+- Access to the Azure DevOps organization with a Microsoft/Entra ID account (personal accounts do not work!)
 
-## Extension Settings
+## Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `azureDevOpsPrComments.organizationUrl` | *(auto-detect)* | Override the Azure DevOps organization URL |
-| `azureDevOpsPrComments.project` | *(auto-detect)* | Override the Azure DevOps project name |
-| `azureDevOpsPrComments.showResolvedThreads` | `false` | Show resolved/closed comment threads |
+| `azureDevOpsPrComments.organizationUrl` | *(auto-detect)* | Override the detected Azure DevOps organization URL |
+| `azureDevOpsPrComments.project` | *(auto-detect)* | Override the detected Azure DevOps project name |
+| `azureDevOpsPrComments.showResolvedThreads` | `false` | Show resolved threads as well |
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `Azure PR Comments: Sign In` | Sign in to Azure DevOps via Entra ID |
-| `Azure PR Comments: Sign Out` | Sign out |
-| `Azure PR Comments: Refresh PR Comments` | Manually refresh comments |
-| `Azure PR Comments: Open in Azure DevOps` | Open the current pull request in Azure DevOps |
+| `Azure DevOps PR Comments: Sign In` | Sign in to Azure DevOps |
+| `Azure DevOps PR Comments: Sign Out` | Sign out |
+| `Azure DevOps PR Comments: Refresh PR Comments` | Load or refresh comments for the current PR |
+| `Azure DevOps PR Comments: Open in Azure DevOps` | Open the current PR in Azure DevOps |
+| `Azure DevOps PR Comments: Show Diagnostics` | Show basic diagnostics for sign-in, repository detection, and PR lookup |
 
-## Supported Remote URL Formats
+## Notes
 
-The extension auto-detects your Azure DevOps repository from the following git remote URL formats:
+- Refresh is manual. The extension does not auto-refresh comments in the background.
+- Only the first active PR for the current branch is shown.
+- Only file-level threads are shown inline. PR-level comments without a file are not.
+- Creating new top-level review threads is not supported from the editor at the moment.
+- Azure DevOps Server (on-premises) is not supported.
+
+## Supported remote URL formats
 
 - `https://dev.azure.com/org/project/_git/repo`
 - `https://org@dev.azure.com/org/project/_git/repo`
 - `https://org.visualstudio.com/project/_git/repo`
 - `git@ssh.dev.azure.com:v3/org/project/repo`
-
-## Known Limitations
-
-- Only the first open PR for the current branch is shown
-- PR-level comments (not attached to a file) are not shown inline
-- Only Azure DevOps Services (cloud) is supported; Azure DevOps Server (on-premise) is not

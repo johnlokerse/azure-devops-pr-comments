@@ -37,7 +37,7 @@ export class RepositoryDetector {
       if (configOrg && configProject) {
         // Can't auto-detect repo name without a remote URL
         vscode.window.showWarningMessage(
-          'Azure PR Comments: Could not detect repository from git remote. Please ensure this is an Azure DevOps repository.'
+          'Azure DevOps PR Comments: Could not detect repository from git remote. Please ensure this is an Azure DevOps repository.'
         );
       }
       return undefined;

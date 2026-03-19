@@ -55,7 +55,7 @@ export class AuthProvider {
   async getToken(): Promise<string> {
     const session = await this.getSession(true);
     if (!session) {
-      throw new Error('Not signed in to Azure DevOps. Run "Azure PR Comments: Sign In".');
+      throw new Error('Not signed in to Azure DevOps. Run "Azure DevOps PR Comments: Sign In".');
     }
     return session.accessToken;
   }

@@ -4,7 +4,7 @@ import { isResolvedThreadStatus, type PullRequest, type PullRequestThread } from
 import { ThreadMapper, buildCommentBody, formatDate } from './threadMapper.js';
 
 const CONTROLLER_ID = 'azurePrComments';
-const CONTROLLER_LABEL = 'Azure DevOps PR';
+const CONTROLLER_LABEL = 'Azure DevOps PR Comments';
 
 export class PrCommentController implements vscode.Disposable {
   private readonly _controller: vscode.CommentController;
@@ -68,7 +68,7 @@ export class PrCommentController implements vscode.Disposable {
    */
   async handleReply(reply: vscode.CommentReply): Promise<void> {
     if (!this._currentPr || !this._adoClient) {
-      vscode.window.showErrorMessage('Azure PR Comments: No active pull request.');
+      vscode.window.showErrorMessage('Azure DevOps PR Comments: No active pull request.');
       return;
     }
 
@@ -99,7 +99,7 @@ export class PrCommentController implements vscode.Disposable {
         ];
       }
     } catch (err) {
-      vscode.window.showErrorMessage(`Azure PR Comments: Failed to post reply — ${String(err)}`);
+      vscode.window.showErrorMessage(`Azure DevOps PR Comments: Failed to post reply — ${String(err)}`);
     }
   }
 
@@ -135,7 +135,7 @@ export class PrCommentController implements vscode.Disposable {
         : vscode.CommentThreadState.Resolved;
       vsThread.contextValue = status === 'active' ? 'open' : 'resolved';
     } catch (err) {
-      vscode.window.showErrorMessage(`Azure PR Comments: Failed to update thread — ${String(err)}`);
+      vscode.window.showErrorMessage(`Azure DevOps PR Comments: Failed to update thread — ${String(err)}`);
     }
   }
 
