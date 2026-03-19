@@ -4,6 +4,10 @@
   "description": "Show Azure DevOps pull request comments inline in VS Code",
   "version": "0.1.0",
   "publisher": "johnlokerse",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnlokerse/azure-devops-pr-comments.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
