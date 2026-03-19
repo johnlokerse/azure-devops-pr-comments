@@ -29,8 +29,8 @@ export class StatusBarManager implements vscode.Disposable {
 
   showIdle(): void {
     this._item.command = undefined;
-    this._item.text = '$(git-pull-request) Azure DevOps PR Comments';
-    this._item.tooltip = 'Azure DevOps PR Comments — Use the refresh button to load comments.';
+    this._item.text = '$(git-pull-request) Azure DevOps PR';
+    this._item.tooltip = 'Azure DevOps PR — Use the refresh button to load comments.';
     this._item.show();
     this.showRefreshButton();
     this._openInAzureDevOpsItem.hide();
@@ -38,8 +38,8 @@ export class StatusBarManager implements vscode.Disposable {
 
   showLoading(): void {
     this._item.command = undefined;
-    this._item.tooltip = 'Azure DevOps PR Comments — Refreshing';
-    this._item.text = '$(sync~spin) Azure DevOps PR Comments';
+    this._item.tooltip = 'Azure DevOps PR — Refreshing';
+    this._item.text = '$(sync~spin) Azure DevOps PR';
     this._item.show();
     this._refreshItem.command = undefined;
     this._refreshItem.text = '$(sync~spin)';

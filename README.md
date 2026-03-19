@@ -4,6 +4,8 @@ This extension shows Azure DevOps pull request comment threads inline in VS Code
 
 It is meant for working with an existing pull request from your local branch. You can load the current PR, read file-level review comments in the editor, reply to a thread, resolve or reopen a thread, and open the PR in Azure DevOps.
 
+![Example of inline PR comments in VS Code](images/example.png)
+
 ## What it does
 
 - Shows file-level PR comment threads on the lines they belong to
