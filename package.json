@@ -2,8 +2,8 @@
   "name": "azure-devops-pr-comments",
   "displayName": "Azure DevOps PR Comments",
   "description": "Show Azure DevOps pull request comments inline in VS Code",
-  "version": "0.1.0",
-  "publisher": "johnlokerse",
+  "version": "0.2.0",
+  "publisher": "JohnLokerse",
   "repository": {
     "type": "git",
     "url": "https://github.com/johnlokerse/azure-devops-pr-comments.git"
