@@ -8,8 +8,16 @@
     "vscode": "^1.85.0"
   },
   "icon": "images/icon.png",
-  "categories": ["Other"],
-  "keywords": ["azure devops", "pull request", "code review", "comments"],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "azure devops",
+    "pull request",
+    "code review",
+    "comments",
+    "pr"
+  ],
   "activationEvents": [
     "workspaceContains:.git"
   ],
