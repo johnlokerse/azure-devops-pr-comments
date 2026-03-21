@@ -9,17 +9,20 @@ It is meant for working with an existing pull request from your local branch. Yo
 ## What it does
 
 - Shows file-level PR comment threads on the lines they belong to
+- Automatically loads comments when you open VS Code or switch branches
 - Lets you reply to an existing thread from VS Code
 - Lets you resolve or reopen a thread
 - Adds status bar buttons for manual refresh and opening the PR in Azure DevOps
+- Shows a live countdown next to the refresh button indicating when the next auto-refresh will occur
 
 ## How to use it
 
 1. Open a repository that is cloned from Azure DevOps Services.
 2. Run **Azure DevOps PR Comments: Sign In** from the Command Palette.
 3. Sign in with your Microsoft/Entra ID work account.
-4. Click the refresh button in the status bar, or run **Azure DevOps PR Comments: Refresh PR Comments**.
-5. If the current branch has an active pull request, the related file-level threads will appear in the editor.
+4. If the current branch has an active pull request, the related file-level threads will appear in the editor automatically.
+
+You can also click the refresh button in the status bar, or run **Azure DevOps PR Comments: Refresh PR Comments** at any time.
 
 ## Requirements
 
@@ -34,6 +37,7 @@ It is meant for working with an existing pull request from your local branch. Yo
 | `azureDevOpsPrComments.organizationUrl` | *(auto-detect)* | Override the detected Azure DevOps organization URL |
 | `azureDevOpsPrComments.project` | *(auto-detect)* | Override the detected Azure DevOps project name |
 | `azureDevOpsPrComments.showResolvedThreads` | `false` | Show resolved threads as well |
+| `azureDevOpsPrComments.autoRefreshInterval` | `5` | Interval in minutes to automatically refresh PR comments. Set to `0` to disable. |
 
 ## Commands
 
@@ -47,7 +51,8 @@ It is meant for working with an existing pull request from your local branch. Yo
 
 ## Notes
 
-- Refresh is manual. The extension does not auto-refresh comments in the background.
+- Comments are loaded automatically on startup, on branch change, and on a configurable polling interval (default every 5 minutes).
+- When auto-refresh is enabled, a live countdown is shown next to the refresh button in the status bar (e.g. `↺ 4m` or `↺ 45s`), so you always know when the next refresh will happen.
 - Only the first active PR for the current branch is shown.
 - Only file-level threads are shown inline. PR-level comments without a file are not.
 - Creating new top-level review threads is not supported from the editor at the moment.

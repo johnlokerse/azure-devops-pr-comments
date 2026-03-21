@@ -136,6 +136,61 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  // ── Automatic refresh triggers ───────────────────────────────────────────
+
+  // 1. Refresh once on activation (silent no-op if not authenticated yet)
+  void refresh();
+
+  // 2. Detect branch changes by watching .git/HEAD
+  let branchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const gitHeadWatcher = vscode.workspace.createFileSystemWatcher('**/.git/HEAD');
+  gitHeadWatcher.onDidChange(() => {
+    clearTimeout(branchDebounceTimer);
+    branchDebounceTimer = setTimeout(() => {
+      lastRenderedThreadsKey = undefined;
+      currentPullRequestUrl = undefined;
+      void refresh();
+    }, 500);
+  });
+  context.subscriptions.push(gitHeadWatcher);
+
+  // 3. Periodic polling — restartable so config changes take effect immediately
+  let pollingTimer: ReturnType<typeof setInterval> | undefined;
+  let countdownTimer: ReturnType<typeof setInterval> | undefined;
+  let countdownSeconds = 0;
+  let pollingIntervalSeconds = 0;
+
+  function startPolling(): void {
+    if (pollingTimer !== undefined) { clearInterval(pollingTimer); pollingTimer = undefined; }
+    if (countdownTimer !== undefined) { clearInterval(countdownTimer); countdownTimer = undefined; }
+    const intervalMinutes = Math.max(
+      0,
+      vscode.workspace.getConfiguration('azureDevOpsPrComments').get<number>('autoRefreshInterval', 5)
+    );
+    if (intervalMinutes > 0) {
+      pollingIntervalSeconds = intervalMinutes * 60;
+      countdownSeconds = pollingIntervalSeconds;
+      pollingTimer = setInterval(() => void refresh(), pollingIntervalSeconds * 1000);
+      countdownTimer = setInterval(() => {
+        countdownSeconds = Math.max(0, countdownSeconds - 1);
+        statusBar?.updateCountdown(countdownSeconds);
+      }, 1000);
+    } else {
+      pollingIntervalSeconds = 0;
+      countdownSeconds = 0;
+    }
+  }
+  startPolling();
+  context.subscriptions.push({ dispose: () => { clearInterval(pollingTimer); clearInterval(countdownTimer); clearTimeout(branchDebounceTimer); } });
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('azureDevOpsPrComments.autoRefreshInterval')) {
+        startPolling();
+      }
+    })
+  );
+
   // ── Core refresh function ─────────────────────────────────────────────────
 
   async function refresh(): Promise<void> {
@@ -263,6 +318,9 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     } finally {
       refreshInProgress = false;
+      if (pollingIntervalSeconds > 0) {
+        countdownSeconds = pollingIntervalSeconds;
+      }
       if (refreshQueued) {
         refreshQueued = false;
         void refresh();

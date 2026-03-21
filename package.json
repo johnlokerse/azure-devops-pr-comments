@@ -2,7 +2,7 @@
   "name": "azure-devops-pr-comments",
   "displayName": "Azure DevOps PR Comments",
   "description": "Show Azure DevOps pull request comments inline in VS Code",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "publisher": "JohnLokerse",
   "repository": {
     "type": "git",
@@ -116,6 +116,12 @@
           "type": "boolean",
           "default": false,
           "description": "Show resolved comment threads"
+        },
+        "azureDevOpsPrComments.autoRefreshInterval": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "Interval in minutes to automatically refresh PR comments. Set to 0 to disable."
         }
       }
     }

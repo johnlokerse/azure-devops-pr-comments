@@ -5,6 +5,7 @@ export class StatusBarManager implements vscode.Disposable {
   private readonly _item: vscode.StatusBarItem;
   private readonly _refreshItem: vscode.StatusBarItem;
   private readonly _openInAzureDevOpsItem: vscode.StatusBarItem;
+  private _isLoading = false;
 
   constructor() {
     this._item = vscode.window.createStatusBarItem(
@@ -28,6 +29,7 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   showIdle(): void {
+    this._isLoading = false;
     this._item.command = undefined;
     this._item.text = '$(git-pull-request) Azure DevOps PR';
     this._item.tooltip = 'Azure DevOps PR — Use the refresh button to load comments.';
@@ -37,6 +39,7 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   showLoading(): void {
+    this._isLoading = true;
     this._item.command = undefined;
     this._item.tooltip = 'Azure DevOps PR — Refreshing';
     this._item.text = '$(sync~spin) Azure DevOps PR';
@@ -49,6 +52,7 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   showPullRequest(pr: PullRequest, threadCount: number): void {
+    this._isLoading = false;
     const icon = '$(git-pull-request)';
     const badge = threadCount > 0 ? ` · $(comment) ${threadCount}` : '';
     this._item.command = undefined;
@@ -60,6 +64,7 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   showNoPullRequest(): void {
+    this._isLoading = false;
     this._item.command = undefined;
     this._item.text = '$(git-branch) No open PR';
     this._item.tooltip = 'No open Azure DevOps pull request for this branch. Use the refresh button to check again.';
@@ -69,6 +74,7 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   showAccessDenied(): void {
+    this._isLoading = false;
     this._item.command = 'azurePrComments.diagnose';
     this._item.text = '$(warning) Azure DevOps access denied';
     this._item.tooltip = 'Signed in, but the Azure DevOps API denied access. Click for diagnostics.';
@@ -78,6 +84,7 @@ export class StatusBarManager implements vscode.Disposable {
   }
 
   showNotConnected(): void {
+    this._isLoading = false;
     this._item.text = '$(azure) Sign in to Azure DevOps';
     this._item.command = 'azurePrComments.signIn';
     this._item.tooltip = 'Click to sign in';
@@ -90,6 +97,15 @@ export class StatusBarManager implements vscode.Disposable {
     this._item.hide();
     this._refreshItem.hide();
     this._openInAzureDevOpsItem.hide();
+  }
+
+  updateCountdown(seconds: number): void {
+    if (this._isLoading) { return; }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const label = mins > 0 ? `${mins}m` : `${secs}s`;
+    this._refreshItem.text = `$(refresh) ${label}`;
+    this._refreshItem.tooltip = `Refresh Azure DevOps PR comments · Next auto-refresh in ${label}`;
   }
 
   dispose(): void {
