@@ -20,9 +20,10 @@ export function activate(context: vscode.ExtensionContext): void {
   commentController = new PrCommentController();
   statusBar = new StatusBarManager();
   const output = vscode.window.createOutputChannel('Azure DevOps PR Comments');
+  const diagOutput = vscode.window.createOutputChannel('Azure DevOps PR Comments — Diagnostics');
   statusBar.showIdle();
 
-  context.subscriptions.push(commentController, statusBar, output);
+  context.subscriptions.push(commentController, statusBar, output, diagOutput);
 
   // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -80,6 +81,17 @@ export function activate(context: vscode.ExtensionContext): void {
             const threads = await client.getPullRequestThreads(pr.pullRequestId);
             threadSummary = `Threads: ${threads.length}`;
             locationsSummary = `Locations: ${threads.slice(0, 10).map(describeThreadLocation).join(', ') || '(none)'}`;
+
+            // Log raw comment content to dedicated channel so suggestion format can be discovered
+            diagOutput.clear();
+            diagOutput.show(true);
+            diagOutput.appendLine('── Raw comment content (for suggestion format discovery) ──');
+            for (const thread of threads) {
+              for (const comment of thread.comments) {
+                diagOutput.appendLine(`Thread #${thread.id}, Comment #${comment.id}: ${JSON.stringify(comment.content)}`);
+              }
+            }
+            diagOutput.appendLine('──────────────────────────────────────────────────────────');
             if (workspaceRoot) {
               const mapper = new ThreadMapper(workspaceRoot);
               const showResolved = vscode.workspace.getConfiguration('azureDevOpsPrComments')
@@ -124,6 +136,43 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (choice === copy) {
         await vscode.env.clipboard.writeText(msg);
+      }
+    }),
+
+    vscode.commands.registerCommand('azurePrComments.applySuggestion', async (args: { threadId: number }) => {
+      const suggestion = commentController?.getSuggestion(args.threadId);
+      if (!suggestion) {
+        vscode.window.showErrorMessage('Azure DevOps PR Comments: Could not find suggestion data. Try refreshing first.');
+        return;
+      }
+
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage('Azure DevOps PR Comments: No workspace open.');
+        return;
+      }
+
+      const relativePath = suggestion.filePath.replace(/^\/+/, '');
+      const fileUri = vscode.Uri.joinPath(workspaceRoot, relativePath);
+      const startLine = Math.max(0, suggestion.startLine - 1);
+      const endLine = Math.max(0, suggestion.endLine - 1);
+
+      try {
+        const doc = await vscode.workspace.openTextDocument(fileUri);
+        const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(fileUri, range, suggestion.suggestedCode);
+        const success = await vscode.workspace.applyEdit(edit);
+        if (success) {
+          await vscode.workspace.save(fileUri);
+          vscode.window.showInformationMessage(
+            'Azure DevOps PR Comments: Suggestion applied — resolve the thread in Azure DevOps when ready.'
+          );
+        } else {
+          vscode.window.showErrorMessage('Azure DevOps PR Comments: Failed to apply suggestion.');
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Azure DevOps PR Comments: Failed to apply suggestion — ${String(err)}`);
       }
     }),
 

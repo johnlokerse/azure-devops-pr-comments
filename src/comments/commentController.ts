@@ -2,13 +2,22 @@ import * as vscode from 'vscode';
 import type { AzureDevOpsClient } from '../api/azureDevOpsClient.js';
 import { isResolvedThreadStatus, type PullRequest, type PullRequestThread } from '../api/types.js';
 import { ThreadMapper, buildCommentBody, formatDate } from './threadMapper.js';
+import { parseSuggestion, type SuggestionBlock } from './suggestionParser.js';
 
 const CONTROLLER_ID = 'azurePrComments';
 const CONTROLLER_LABEL = 'Azure DevOps PR Comments';
 
+interface StoredSuggestion {
+  suggestedCode: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+}
+
 export class PrCommentController implements vscode.Disposable {
   private readonly _controller: vscode.CommentController;
   private readonly _threadMap = new Map<number, vscode.CommentThread>();
+  private readonly _suggestionMap = new Map<number, StoredSuggestion>();
   private _disposables: vscode.Disposable[] = [];
   private _currentPr: PullRequest | undefined;
   private _adoClient: AzureDevOpsClient | undefined;
@@ -42,7 +51,21 @@ export class PrCommentController implements vscode.Disposable {
     const mapped = mapper.mapThreads(adoThreads, showResolved);
 
     for (const { thread, uri, range } of mapped) {
-      const vsComments = thread.comments.map((c) => this.buildVsComment(c, thread));
+      const firstComment = thread.comments[0];
+      const suggestion = firstComment ? parseSuggestion(firstComment.content) : undefined;
+
+      if (suggestion && thread.threadContext?.filePath) {
+        this._suggestionMap.set(thread.id, {
+          suggestedCode: suggestion.suggestedCode,
+          filePath: thread.threadContext.filePath,
+          startLine: thread.threadContext.rightFileStart?.line ?? 1,
+          endLine: thread.threadContext.rightFileEnd?.line ?? thread.threadContext.rightFileStart?.line ?? 1,
+        });
+      }
+
+      const vsComments = thread.comments.map((c, idx) =>
+        this.buildVsComment(c, thread, idx === 0 ? suggestion : undefined)
+      );
       if (vsComments.length === 0) {
         continue;
       }
@@ -142,6 +165,7 @@ export class PrCommentController implements vscode.Disposable {
   clearThreads(): void {
     this._threadMap.forEach((t) => t.dispose());
     this._threadMap.clear();
+    this._suggestionMap.clear();
   }
 
   dispose(): void {
@@ -150,10 +174,33 @@ export class PrCommentController implements vscode.Disposable {
     this._controller.dispose();
   }
 
+  getSuggestion(threadId: number): StoredSuggestion | undefined {
+    return this._suggestionMap.get(threadId);
+  }
+
   private buildVsComment(
     comment: { id: number; content: string; author: { displayName: string }; publishedDate: string },
-    _thread: { id: number; status: string }
+    thread: { id: number; status: string },
+    suggestion?: SuggestionBlock
   ): vscode.Comment {
+    if (suggestion) {
+      const md = new vscode.MarkdownString('', true);
+      md.isTrusted = { enabledCommands: ['azurePrComments.applySuggestion'] };
+      if (suggestion.prose) {
+        md.appendMarkdown(suggestion.prose + '\n\n');
+      }
+      md.appendMarkdown('**Suggested change**\n\n');
+      md.appendCodeblock(suggestion.suggestedCode);
+      const args = encodeURIComponent(JSON.stringify({ threadId: thread.id }));
+      md.appendMarkdown(`[$(check) Apply change](command:azurePrComments.applySuggestion?${args})`);
+      return {
+        body: md,
+        author: { name: comment.author.displayName },
+        label: formatDate(comment.publishedDate),
+        mode: vscode.CommentMode.Preview,
+      };
+    }
+
     return {
       body: buildCommentBody(comment as Parameters<typeof buildCommentBody>[0]),
       author: { name: comment.author.displayName },
