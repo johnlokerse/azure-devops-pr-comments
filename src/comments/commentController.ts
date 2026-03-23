@@ -189,8 +189,9 @@ export class PrCommentController implements vscode.Disposable {
       if (suggestion.prose) {
         md.appendMarkdown(suggestion.prose + '\n\n');
       }
-      md.appendMarkdown('**Suggested change**\n\n');
+      md.appendMarkdown('**Suggested change**\n\n---\n\n');
       md.appendCodeblock(suggestion.suggestedCode);
+      md.appendMarkdown('---\n\n');
       const args = encodeURIComponent(JSON.stringify({ threadId: thread.id }));
       md.appendMarkdown(`[$(check) Apply change](command:azurePrComments.applySuggestion?${args})`);
       return {
