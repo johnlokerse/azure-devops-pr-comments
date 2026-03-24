@@ -240,6 +240,19 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  // 4. Re-authenticate when VS Code auth sessions change.
+  //    When all extensions reload (e.g. after an extension update), VS Code's
+  //    built-in Microsoft auth provider reinitialises. The initial refresh may
+  //    run before it is ready and find no session. Listening here lets us
+  //    automatically restore the session once the provider is available again.
+  context.subscriptions.push(
+    vscode.authentication.onDidChangeSessions((e) => {
+      if (e.provider.id === 'microsoft') {
+        void refresh();
+      }
+    })
+  );
+
   // ── Core refresh function ─────────────────────────────────────────────────
 
   async function refresh(): Promise<void> {

@@ -32,7 +32,7 @@ export class AuthProvider {
               ...(preferredAccount ? { account: preferredAccount } : {}),
             }
           : {
-              createIfNone: false,
+              silent: true,
               ...(preferredAccount ? { account: preferredAccount } : {}),
             }
       );
