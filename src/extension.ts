@@ -13,6 +13,7 @@ let lastRenderedThreadsKey: string | undefined;
 let currentPullRequestUrl: string | undefined;
 let refreshInProgress = false;
 let refreshQueued = false;
+let pendingAuthRetry: ReturnType<typeof setTimeout> | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const auth = new AuthProvider(context.globalState);
@@ -230,12 +231,25 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
   startPolling();
-  context.subscriptions.push({ dispose: () => { clearInterval(pollingTimer); clearInterval(countdownTimer); clearTimeout(branchDebounceTimer); } });
+  context.subscriptions.push({ dispose: () => { clearInterval(pollingTimer); clearInterval(countdownTimer); clearTimeout(branchDebounceTimer); clearTimeout(pendingAuthRetry); } });
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('azureDevOpsPrComments.autoRefreshInterval')) {
         startPolling();
+      }
+    })
+  );
+
+  // 4. Re-authenticate when VS Code auth sessions change.
+  //    When all extensions reload (e.g. after an extension update), VS Code's
+  //    built-in Microsoft auth provider reinitialises. The initial refresh may
+  //    run before it is ready and find no session. Listening here lets us
+  //    automatically restore the session once the provider is available again.
+  context.subscriptions.push(
+    vscode.authentication.onDidChangeSessions((e) => {
+      if (e.provider.id === 'microsoft') {
+        void refresh();
       }
     })
   );
@@ -262,9 +276,24 @@ export function activate(context: vscode.ExtensionContext): void {
         lastRenderedThreadsKey = undefined;
         currentPullRequestUrl = undefined;
         commentController?.clearThreads();
-        statusBar?.showNotConnected();
+
+        // If the user was previously signed in, the auth provider may still be
+        // loading after an extension-update reload. Keep the status bar neutral
+        // and schedule one final retry — the onDidChangeSessions listener may
+        // also trigger a refresh when the provider becomes available.
+        if (!pendingAuthRetry && auth.hasStoredPreference()) {
+          output.appendLine('Previously signed in — scheduling one more retry…');
+          statusBar?.showIdle();
+          pendingAuthRetry = setTimeout(() => {
+            pendingAuthRetry = undefined;
+            void refresh();
+          }, 5000);
+        } else {
+          statusBar?.showNotConnected();
+        }
         return;
       }
+      if (pendingAuthRetry) { clearTimeout(pendingAuthRetry); pendingAuthRetry = undefined; }
       output.appendLine(`Signed in as: ${session.account.label}`);
       output.appendLine(`Tenant ID: ${auth.getAccountTenantId(session) ?? '(unknown)'}`);
       output.appendLine(`Consumer MSA account: ${auth.isConsumerMicrosoftAccount(session) ? 'yes' : 'no'}`);
