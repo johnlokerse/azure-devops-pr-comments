@@ -81,17 +81,7 @@ export class AuthProvider {
       if (s) { return s; }
     } catch { /* provider may not be ready yet */ }
 
-    // 2. Non-silent check — activates the provider but does not create a
-    //    session. The account hint helps VS Code pick the right session even
-    //    when the session preference has been cleared.
-    try {
-      const s = await vscode.authentication.getSession(
-        AUTH_PROVIDER_ID, [ADO_SCOPE], accountOpt,
-      );
-      if (s) { return s; }
-    } catch { /* continue to retries */ }
-
-    // 3. Retry loop — the provider may still be loading sessions from the OS
+    // 2. Retry loop — the provider may still be loading sessions from the OS
     //    credential store (common after extension-update reloads).
     if (!hasStoredPreference) { return undefined; }
 
