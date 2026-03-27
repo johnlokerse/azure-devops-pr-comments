@@ -194,7 +194,6 @@ export class PrCommentController implements vscode.Disposable {
         ? await resolveImages(suggestion.prose, this._getToken!)
         : '';
       const md = new vscode.MarkdownString('', true);
-      md.supportHtml = true;
       md.isTrusted = { enabledCommands: ['azurePrComments.applySuggestion'] };
       if (prose) {
         md.appendMarkdown(prose + '\n\n');

@@ -79,9 +79,10 @@ export async function buildCommentBody(
   getToken: () => Promise<string>
 ): Promise<vscode.MarkdownString> {
   const content = await resolveImages(comment.content, getToken);
-  const md = new vscode.MarkdownString(content, true);
-  md.supportHtml = true;
-  md.isTrusted = true;
+  const md = new vscode.MarkdownString(content);
+  // Do not trust user-controlled PR comment content by default.
+  // Use an empty enabledCommands list to prevent command URIs.
+  md.isTrusted = { enabledCommands: [] };
   return md;
 }
 

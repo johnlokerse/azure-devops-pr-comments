@@ -4,7 +4,7 @@
  * render natively.
  */
 
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as os from 'os';
@@ -22,8 +22,8 @@ const MARKDOWN_IMAGE_RE = /!\[([^\]]*)\]\(([^)]+)\)/g;
 /** Directory used to store fetched images as temp files. */
 const IMAGE_DIR = path.join(os.tmpdir(), 'ado-pr-images');
 
-/** In-memory cache: original URL → local file URI string (or null on failure). */
-const imageCache = new Map<string, string | null>();
+/** In-memory cache: original URL → local file URI string. Only successful downloads are cached. */
+const imageCache = new Map<string, string>();
 
 /**
  * Returns true when the URL points to an Azure DevOps hosted attachment
@@ -39,12 +39,6 @@ function isAzureDevOpsImageUrl(url: string): boolean {
     return isAdoHost && parsed.pathname.includes('/_apis/');
   } catch {
     return false;
-  }
-}
-
-function ensureImageDir(): void {
-  if (!fs.existsSync(IMAGE_DIR)) {
-    fs.mkdirSync(IMAGE_DIR, { recursive: true });
   }
 }
 
@@ -69,13 +63,14 @@ async function fetchImageToFile(
   token: string
 ): Promise<string | null> {
   try {
-    ensureImageDir();
+    await fs.mkdir(IMAGE_DIR, { recursive: true });
 
     // Deterministic filename based on URL
     const hash = crypto.createHash('sha256').update(url).digest('hex').slice(0, 16);
 
-    // Check for existing cached file
-    const existing = fs.readdirSync(IMAGE_DIR).find((f) => f.startsWith(hash));
+    // Check for existing cached file on disk
+    const files = await fs.readdir(IMAGE_DIR);
+    const existing = files.find((f) => f.startsWith(hash));
     if (existing) {
       return vscode.Uri.file(path.join(IMAGE_DIR, existing)).toString();
     }
@@ -101,7 +96,7 @@ async function fetchImageToFile(
       response.headers.get('content-type')?.split(';')[0].trim() || 'image/png';
     const ext = extensionForMime(contentType);
     const filePath = path.join(IMAGE_DIR, `${hash}.${ext}`);
-    fs.writeFileSync(filePath, Buffer.from(buffer));
+    await fs.writeFile(filePath, Buffer.from(buffer));
 
     return vscode.Uri.file(filePath).toString();
   } catch {
@@ -140,19 +135,24 @@ export async function resolveImages(
   // Fetch all images in parallel, using cache when available
   const results = await Promise.all(
     matches.map(async (m) => {
-      if (imageCache.has(m.url)) {
-        return { ...m, fileUri: imageCache.get(m.url)! };
+      const cached = imageCache.get(m.url);
+      // If we have a successful cached result, reuse it
+      if (cached) {
+        return { ...m, fileUri: cached };
       }
+      // Either no cache entry or a previous failure – try again
       const fileUri = await fetchImageToFile(m.url, token);
-      imageCache.set(m.url, fileUri);
+      if (fileUri) {
+        imageCache.set(m.url, fileUri);
+      }
       return { ...m, fileUri };
     })
   );
 
   let resolved = content;
-  for (const { alt, url, fileUri } of results) {
+  for (const { full, alt, fileUri } of results) {
     if (fileUri) {
-      resolved = resolved.replace(`![${alt}](${url})`, `![${alt}](${fileUri})`);
+      resolved = resolved.replaceAll(full, `![${alt}](${fileUri})`);
     }
   }
 
@@ -160,14 +160,11 @@ export async function resolveImages(
 }
 
 /** Clears the in-memory image cache and removes temp files. */
-export function clearImageCache(): void {
+export async function clearImageCache(): Promise<void> {
   imageCache.clear();
   try {
-    if (fs.existsSync(IMAGE_DIR)) {
-      for (const file of fs.readdirSync(IMAGE_DIR)) {
-        fs.unlinkSync(path.join(IMAGE_DIR, file));
-      }
-    }
+    const files = await fs.readdir(IMAGE_DIR);
+    await Promise.all(files.map((file) => fs.unlink(path.join(IMAGE_DIR, file))));
   } catch {
     // best-effort cleanup
   }

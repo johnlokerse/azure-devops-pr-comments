@@ -44,7 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
       lastRenderedThreadsKey = undefined;
       currentPullRequestUrl = undefined;
       commentController?.clearThreads();
-      clearImageCache();
+      await clearImageCache();
       statusBar?.showNotConnected();
     }),
 
@@ -478,5 +478,6 @@ function buildPullRequestUrl(
   return `${organizationUrl}/${encodeURIComponent(repo.project)}/_git/${encodeURIComponent(repo.repo)}/pullrequest/${pullRequestId}`;
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
+  await clearImageCache();
 }

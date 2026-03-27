@@ -10,6 +10,7 @@ It is meant for working with an existing pull request from your local branch. Yo
 
 - Shows file-level PR comment threads on the lines they belong to
 - Automatically loads comments when you open VS Code or switch branches
+- Renders inline images (screenshots pasted in Azure DevOps) directly in the comment thread
 - Lets you reply to an existing thread from VS Code
 - Lets you resolve or reopen a thread
 - Adds status bar buttons for manual refresh and opening the PR in Azure DevOps
@@ -56,6 +57,7 @@ You can also click the refresh button in the status bar, or run **Azure DevOps P
 - Only the first active PR for the current branch is shown.
 - Only file-level threads are shown inline. PR-level comments without a file are not.
 - Creating new top-level review threads is not supported from the editor at the moment.
+- Images pasted into Azure DevOps comments are fetched with your sign-in token and cached locally in a temp folder. Only Azure DevOps attachment URLs are resolved; external image URLs are left as-is.
 - Azure DevOps Server (on-premises) is not supported.
 
 ## Supported remote URL formats
