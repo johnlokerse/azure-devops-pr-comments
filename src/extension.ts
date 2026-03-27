@@ -6,6 +6,7 @@ import { AzureDevOpsApiError, AzureDevOpsClient } from './api/azureDevOpsClient.
 import { PrCommentController } from './comments/commentController.js';
 import { ThreadMapper, describeThreadLocation, type MappedThread } from './comments/threadMapper.js';
 import { StatusBarManager } from './ui/statusBar.js';
+import { clearImageCache } from './comments/imageProcessor.js';
 
 let commentController: PrCommentController | undefined;
 let statusBar: StatusBarManager | undefined;
@@ -43,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
       lastRenderedThreadsKey = undefined;
       currentPullRequestUrl = undefined;
       commentController?.clearThreads();
+      clearImageCache();
       statusBar?.showNotConnected();
     }),
 
@@ -358,7 +360,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const renderedThreadsKey = buildRenderedThreadsKey(pr.pullRequestId, workspaceRoot, showResolved, mappedThreads);
         if (renderedThreadsKey !== lastRenderedThreadsKey) {
-          await commentController?.renderThreads(pr, threads, client, workspaceRoot, showResolved);
+          await commentController?.renderThreads(pr, threads, client, workspaceRoot, showResolved, () => auth.getToken());
           lastRenderedThreadsKey = renderedThreadsKey;
           output.appendLine('Rendered comment threads in VS Code.');
         } else {

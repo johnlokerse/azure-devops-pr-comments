@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { isResolvedThreadStatus, type PullRequestThread, type PullRequestComment } from '../api/types.js';
+import { resolveImages } from './imageProcessor.js';
 
 export interface MappedThread {
   thread: PullRequestThread;
@@ -71,10 +72,16 @@ export class ThreadMapper {
 
 /**
  * Formats a comment for display as a VS Code Comment body (Markdown).
+ * Resolves Azure DevOps attachment images to local file URIs.
  */
-export function buildCommentBody(comment: PullRequestComment): vscode.MarkdownString {
-  const md = new vscode.MarkdownString(comment.content, true);
-  md.isTrusted = false;
+export async function buildCommentBody(
+  comment: PullRequestComment,
+  getToken: () => Promise<string>
+): Promise<vscode.MarkdownString> {
+  const content = await resolveImages(comment.content, getToken);
+  const md = new vscode.MarkdownString(content, true);
+  md.supportHtml = true;
+  md.isTrusted = true;
   return md;
 }
 
