@@ -3,6 +3,7 @@ import type { AzureDevOpsClient } from '../api/azureDevOpsClient.js';
 import { isResolvedThreadStatus, type PullRequest, type PullRequestThread } from '../api/types.js';
 import { ThreadMapper, buildCommentBody, formatDate } from './threadMapper.js';
 import { parseSuggestion, type SuggestionBlock } from './suggestionParser.js';
+import { resolveImages } from './imageProcessor.js';
 
 const CONTROLLER_ID = 'azurePrComments';
 const CONTROLLER_LABEL = 'Azure DevOps PR Comments';
@@ -21,6 +22,7 @@ export class PrCommentController implements vscode.Disposable {
   private _disposables: vscode.Disposable[] = [];
   private _currentPr: PullRequest | undefined;
   private _adoClient: AzureDevOpsClient | undefined;
+  private _getToken: (() => Promise<string>) | undefined;
 
   constructor() {
     this._controller = vscode.comments.createCommentController(CONTROLLER_ID, CONTROLLER_LABEL);
@@ -39,10 +41,12 @@ export class PrCommentController implements vscode.Disposable {
     adoThreads: PullRequestThread[],
     adoClient: AzureDevOpsClient,
     workspaceRoot: vscode.Uri,
-    showResolved: boolean
+    showResolved: boolean,
+    getToken: () => Promise<string>
   ): Promise<void> {
     this._currentPr = pr;
     this._adoClient = adoClient;
+    this._getToken = getToken;
 
     // Clear existing threads
     this.clearThreads();
@@ -63,8 +67,10 @@ export class PrCommentController implements vscode.Disposable {
         });
       }
 
-      const vsComments = thread.comments.map((c, idx) =>
-        this.buildVsComment(c, thread, idx === 0 ? suggestion : undefined)
+      const vsComments = await Promise.all(
+        thread.comments.map((c, idx) =>
+          this.buildVsComment(c, thread, idx === 0 ? suggestion : undefined)
+        )
       );
       if (vsComments.length === 0) {
         continue;
@@ -118,7 +124,7 @@ export class PrCommentController implements vscode.Disposable {
         const adoThread = { id: adoThreadId, status: 'active' as const, comments: [] };
         vsThread.comments = [
           ...vsThread.comments,
-          this.buildVsComment(newComment, adoThread),
+          await this.buildVsComment(newComment, adoThread),
         ];
       }
     } catch (err) {
@@ -178,16 +184,19 @@ export class PrCommentController implements vscode.Disposable {
     return this._suggestionMap.get(threadId);
   }
 
-  private buildVsComment(
+  private async buildVsComment(
     comment: { id: number; content: string; author: { displayName: string }; publishedDate: string },
     thread: { id: number; status: string },
     suggestion?: SuggestionBlock
-  ): vscode.Comment {
+  ): Promise<vscode.Comment> {
     if (suggestion) {
+      const prose = suggestion.prose
+        ? await resolveImages(suggestion.prose, this._getToken!)
+        : '';
       const md = new vscode.MarkdownString('', true);
       md.isTrusted = { enabledCommands: ['azurePrComments.applySuggestion'] };
-      if (suggestion.prose) {
-        md.appendMarkdown(suggestion.prose + '\n\n');
+      if (prose) {
+        md.appendMarkdown(prose + '\n\n');
       }
       md.appendMarkdown('**Suggested change**\n\n---\n\n');
       md.appendCodeblock(suggestion.suggestedCode);
@@ -203,7 +212,7 @@ export class PrCommentController implements vscode.Disposable {
     }
 
     return {
-      body: buildCommentBody(comment as Parameters<typeof buildCommentBody>[0]),
+      body: await buildCommentBody(comment as Parameters<typeof buildCommentBody>[0], this._getToken!),
       author: { name: comment.author.displayName },
       label: formatDate(comment.publishedDate),
       mode: vscode.CommentMode.Preview,
