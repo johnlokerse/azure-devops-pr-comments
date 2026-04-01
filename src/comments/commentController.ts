@@ -35,6 +35,10 @@ export class PrCommentController implements vscode.Disposable {
 
   /**
    * Renders all fetched threads as inline VS Code comment threads.
+   *
+   * Performs incremental updates: existing threads are mutated in-place so that
+   * any reply text the user is currently composing is not destroyed.  Only
+   * threads that have been removed from Azure DevOps are disposed.
    */
   async renderThreads(
     pr: PullRequest,
@@ -48,11 +52,10 @@ export class PrCommentController implements vscode.Disposable {
     this._adoClient = adoClient;
     this._getToken = getToken;
 
-    // Clear existing threads
-    this.clearThreads();
-
     const mapper = new ThreadMapper(workspaceRoot);
     const mapped = mapper.mapThreads(adoThreads, showResolved);
+
+    const seenThreadIds = new Set<number>();
 
     for (const { thread, uri, range } of mapped) {
       const firstComment = thread.comments[0];
@@ -65,6 +68,8 @@ export class PrCommentController implements vscode.Disposable {
           startLine: thread.threadContext.rightFileStart?.line ?? 1,
           endLine: thread.threadContext.rightFileEnd?.line ?? thread.threadContext.rightFileStart?.line ?? 1,
         });
+      } else {
+        this._suggestionMap.delete(thread.id);
       }
 
       const vsComments = await Promise.all(
@@ -72,23 +77,75 @@ export class PrCommentController implements vscode.Disposable {
           this.buildVsComment(c, thread, idx === 0 ? suggestion : undefined)
         )
       );
+
+      // If the thread has no renderable comments, dispose any existing VS Code
+      // thread for this ID and skip — do NOT add to seenThreadIds so the
+      // cleanup pass below will also remove it if it somehow already exists.
       if (vsComments.length === 0) {
+        const stale = this._threadMap.get(thread.id);
+        if (stale) {
+          stale.dispose();
+          this._threadMap.delete(thread.id);
+          this._suggestionMap.delete(thread.id);
+        }
         continue;
       }
 
-      const vsThread = this._controller.createCommentThread(uri, range, vsComments);
-      vsThread.label = `Thread #${thread.id}`;
-      vsThread.state = isResolvedThreadStatus(thread.status)
-        ? vscode.CommentThreadState.Resolved
-        : vscode.CommentThreadState.Unresolved;
-      vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
-      vsThread.contextValue = vsThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
-      vsThread.canReply = true;
+      // Only mark as seen once we know the thread will actually be rendered.
+      seenThreadIds.add(thread.id);
 
-      // Store the ADO thread ID on the VS thread for later operations
-      (vsThread as unknown as { adoThreadId: number }).adoThreadId = thread.id;
+      const existingThread = this._threadMap.get(thread.id);
+      if (existingThread) {
+        if (existingThread.uri.toString() !== uri.toString()) {
+          // URI changed (thread moved to a different file) — must recreate since
+          // the VS Code API does not allow mutating a thread's uri in-place.
+          existingThread.dispose();
 
-      this._threadMap.set(thread.id, vsThread);
+          const vsThread = this._controller.createCommentThread(uri, range, vsComments);
+          vsThread.label = `Thread #${thread.id}`;
+          vsThread.state = isResolvedThreadStatus(thread.status)
+            ? vscode.CommentThreadState.Resolved
+            : vscode.CommentThreadState.Unresolved;
+          vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+          vsThread.contextValue = vsThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
+          vsThread.canReply = true;
+          (vsThread as unknown as { adoThreadId: number }).adoThreadId = thread.id;
+          this._threadMap.set(thread.id, vsThread);
+        } else {
+          // Update the existing thread object in-place to preserve any open reply
+          // box — disposing and recreating it would clear unsaved reply text.
+          existingThread.range = range;
+          existingThread.comments = vsComments;
+          existingThread.state = isResolvedThreadStatus(thread.status)
+            ? vscode.CommentThreadState.Resolved
+            : vscode.CommentThreadState.Unresolved;
+          existingThread.contextValue =
+            existingThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
+        }
+      } else {
+        const vsThread = this._controller.createCommentThread(uri, range, vsComments);
+        vsThread.label = `Thread #${thread.id}`;
+        vsThread.state = isResolvedThreadStatus(thread.status)
+          ? vscode.CommentThreadState.Resolved
+          : vscode.CommentThreadState.Unresolved;
+        vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+        vsThread.contextValue = vsThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
+        vsThread.canReply = true;
+
+        // Store the ADO thread ID on the VS thread for later operations
+        (vsThread as unknown as { adoThreadId: number }).adoThreadId = thread.id;
+
+        this._threadMap.set(thread.id, vsThread);
+      }
+    }
+
+    // Dispose threads that no longer exist in the updated data
+    for (const [threadId, vsThread] of this._threadMap) {
+      if (!seenThreadIds.has(threadId)) {
+        vsThread.dispose();
+        this._threadMap.delete(threadId);
+        this._suggestionMap.delete(threadId);
+      }
     }
   }
 
