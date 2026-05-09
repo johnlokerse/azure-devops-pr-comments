@@ -179,12 +179,24 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
 
-    vscode.commands.registerCommand('azurePrComments.resolveThread', async (thread: vscode.CommentThread) => {
-      await commentController?.resolveThread(thread);
+    vscode.commands.registerCommand('azurePrComments.setStatusActive', async (thread: vscode.CommentThread) => {
+      await commentController?.setStatusActive(thread);
     }),
 
-    vscode.commands.registerCommand('azurePrComments.reopenThread', async (thread: vscode.CommentThread) => {
-      await commentController?.reopenThread(thread);
+    vscode.commands.registerCommand('azurePrComments.setStatusPending', async (thread: vscode.CommentThread) => {
+      await commentController?.setStatusPending(thread);
+    }),
+
+    vscode.commands.registerCommand('azurePrComments.setStatusResolved', async (thread: vscode.CommentThread) => {
+      await commentController?.setStatusResolved(thread);
+    }),
+
+    vscode.commands.registerCommand('azurePrComments.setStatusWontFix', async (thread: vscode.CommentThread) => {
+      await commentController?.setStatusWontFix(thread);
+    }),
+
+    vscode.commands.registerCommand('azurePrComments.setStatusClosed', async (thread: vscode.CommentThread) => {
+      await commentController?.setStatusClosed(thread);
     }),
   );
 
