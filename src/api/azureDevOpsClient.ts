@@ -107,12 +107,13 @@ export class AzureDevOpsClient {
 
   private async handleResponse<T>(response: Response, url: string): Promise<T> {
     if (!response.ok) {
-      let detail = '';
+      const bodyText = await response.text();
+      let detail = bodyText;
       try {
-        const json = await response.json() as { message?: string };
+        const json = JSON.parse(bodyText) as { message?: string };
         detail = json.message ?? JSON.stringify(json);
       } catch {
-        detail = await response.text();
+        detail = bodyText;
       }
       // Include URL path (without query string) in error for easier diagnosis
       const urlPath = url.split('?')[0];

@@ -21,6 +21,22 @@ interface GitRepository {
   };
 }
 
+function decodeUrlSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function decodedRepository(org: string, project: string, repo: string): { org: string; project: string; repo: string } {
+  return {
+    org: decodeUrlSegment(org),
+    project: decodeUrlSegment(project),
+    repo: decodeUrlSegment(repo),
+  };
+}
+
 export class RepositoryDetector {
   /**
    * Returns the Azure DevOps repository details for the current workspace,
@@ -97,17 +113,17 @@ export class RepositoryDetector {
   parseRemoteUrl(url: string): { org: string; project: string; repo: string } | undefined {
     const devAzure = url.match(DEV_AZURE_COM_REGEX);
     if (devAzure) {
-      return { org: devAzure[1], project: devAzure[2], repo: devAzure[3] };
+      return decodedRepository(devAzure[1], devAzure[2], devAzure[3]);
     }
 
     const vscom = url.match(VISUALSTUDIO_COM_REGEX);
     if (vscom) {
-      return { org: vscom[1], project: vscom[2], repo: vscom[3] };
+      return decodedRepository(vscom[1], vscom[2], vscom[3]);
     }
 
     const ssh = url.match(SSH_DEV_AZURE_REGEX);
     if (ssh) {
-      return { org: ssh[1], project: ssh[2], repo: ssh[3] };
+      return decodedRepository(ssh[1], ssh[2], ssh[3]);
     }
 
     return undefined;
