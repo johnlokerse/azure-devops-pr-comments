@@ -90,13 +90,16 @@ export class PrCommentController implements vscode.Disposable {
     for (const { thread, uri, range } of mapped) {
       const firstComment = thread.comments[0];
       const suggestion = firstComment ? parseSuggestion(firstComment.content) : undefined;
+      const threadContext = thread.threadContext;
+      const filePath = threadContext?.filePath?.trim();
+      const renderableSuggestion = suggestion && filePath ? suggestion : undefined;
 
-      if (suggestion && thread.threadContext?.filePath) {
+      if (renderableSuggestion && filePath && threadContext) {
         this._suggestionMap.set(thread.id, {
-          suggestedCode: suggestion.suggestedCode,
-          filePath: thread.threadContext.filePath,
-          startLine: thread.threadContext.rightFileStart?.line ?? 1,
-          endLine: thread.threadContext.rightFileEnd?.line ?? thread.threadContext.rightFileStart?.line ?? 1,
+          suggestedCode: renderableSuggestion.suggestedCode,
+          filePath,
+          startLine: threadContext.rightFileStart?.line ?? 1,
+          endLine: threadContext.rightFileEnd?.line ?? threadContext.rightFileStart?.line ?? 1,
         });
       } else {
         this._suggestionMap.delete(thread.id);
@@ -104,7 +107,7 @@ export class PrCommentController implements vscode.Disposable {
 
       const vsComments = await Promise.all(
         thread.comments.map((c, idx) =>
-          this.buildVsComment(c, thread, idx === 0 ? suggestion : undefined)
+          this.buildVsComment(c, thread, idx === 0 ? renderableSuggestion : undefined)
         )
       );
 
@@ -131,42 +134,15 @@ export class PrCommentController implements vscode.Disposable {
           // the VS Code API does not allow mutating a thread's uri in-place.
           existingThread.dispose();
 
-          const vsThread = this._controller.createCommentThread(uri, range, vsComments);
-          vsThread.label = threadLabel(thread.id, thread.status);
-          vsThread.state = isResolvedThreadStatus(thread.status)
-            ? vscode.CommentThreadState.Resolved
-            : vscode.CommentThreadState.Unresolved;
-          vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
-          vsThread.contextValue = threadStatusContextValue(thread.status);
-          vsThread.canReply = true;
-          (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoThreadId = thread.id;
-          (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoStatus = thread.status;
+          const vsThread = this.createVsThread(uri, range, vsComments, thread);
           this._threadMap.set(thread.id, vsThread);
         } else {
           // Update the existing thread object in-place to preserve any open reply
           // box — disposing and recreating it would clear unsaved reply text.
-          existingThread.range = range;
-          existingThread.comments = vsComments;
-          existingThread.label = threadLabel(thread.id, thread.status);
-          existingThread.state = isResolvedThreadStatus(thread.status)
-            ? vscode.CommentThreadState.Resolved
-            : vscode.CommentThreadState.Unresolved;
-          existingThread.contextValue = threadStatusContextValue(thread.status);
-          (existingThread as unknown as { adoStatus: ThreadStatus }).adoStatus = thread.status;
+          this.updateVsThread(existingThread, range, vsComments, thread);
         }
       } else {
-        const vsThread = this._controller.createCommentThread(uri, range, vsComments);
-        vsThread.label = threadLabel(thread.id, thread.status);
-        vsThread.state = isResolvedThreadStatus(thread.status)
-          ? vscode.CommentThreadState.Resolved
-          : vscode.CommentThreadState.Unresolved;
-        vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
-        vsThread.contextValue = threadStatusContextValue(thread.status);
-        vsThread.canReply = true;
-
-        // Store the ADO thread ID and current status on the VS thread for later operations
-        (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoThreadId = thread.id;
-        (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoStatus = thread.status;
+        const vsThread = this.createVsThread(uri, range, vsComments, thread);
 
         this._threadMap.set(thread.id, vsThread);
       }
@@ -280,6 +256,39 @@ export class PrCommentController implements vscode.Disposable {
 
   getSuggestion(threadId: number): StoredSuggestion | undefined {
     return this._suggestionMap.get(threadId);
+  }
+
+  private createVsThread(
+    uri: vscode.Uri,
+    range: vscode.Range | undefined,
+    comments: readonly vscode.Comment[],
+    thread: PullRequestThread
+  ): vscode.CommentThread {
+    const initialRange = range ?? new vscode.Range(0, 0, 0, 0);
+    const vsThread = this._controller.createCommentThread(uri, initialRange, comments);
+    vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+    vsThread.canReply = true;
+    this.updateVsThread(vsThread, range, comments, thread);
+    return vsThread;
+  }
+
+  private updateVsThread(
+    vsThread: vscode.CommentThread,
+    range: vscode.Range | undefined,
+    comments: readonly vscode.Comment[],
+    thread: PullRequestThread
+  ): void {
+    vsThread.range = range;
+    vsThread.comments = comments;
+    vsThread.label = threadLabel(thread.id, thread.status);
+    vsThread.state = isResolvedThreadStatus(thread.status)
+      ? vscode.CommentThreadState.Resolved
+      : vscode.CommentThreadState.Unresolved;
+    vsThread.contextValue = threadStatusContextValue(thread.status);
+
+    // Store the ADO thread ID and current status on the VS thread for later operations.
+    (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoThreadId = thread.id;
+    (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoStatus = thread.status;
   }
 
   private async buildVsComment(
