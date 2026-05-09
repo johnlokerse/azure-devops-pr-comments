@@ -1,12 +1,42 @@
 import * as vscode from 'vscode';
 import type { AzureDevOpsClient } from '../api/azureDevOpsClient.js';
-import { isResolvedThreadStatus, type PullRequest, type PullRequestThread } from '../api/types.js';
+import { isResolvedThreadStatus, type PullRequest, type PullRequestThread, type ThreadStatus } from '../api/types.js';
 import { ThreadMapper, buildCommentBody, formatDate } from './threadMapper.js';
 import { parseSuggestion, type SuggestionBlock } from './suggestionParser.js';
 import { resolveImages } from './imageProcessor.js';
 
 const CONTROLLER_ID = 'azurePrComments';
 const CONTROLLER_LABEL = 'Azure DevOps PR Comments';
+
+function threadStatusContextValue(status: ThreadStatus): string {
+  switch (status) {
+    case 'fixed': return 'resolved';
+    case 'wontFix': return 'wontfix';
+    case 'closed': return 'closed';
+    case 'byDesign': return 'bydesign';
+    case 'pending': return 'pending';
+    default: return 'active';
+  }
+}
+
+function threadStatusLabel(status: ThreadStatus): string {
+  switch (status) {
+    case 'active': return 'Active';
+    case 'pending': return 'Pending';
+    case 'fixed': return 'Resolved';
+    case 'wontFix': return "Won't Fix";
+    case 'closed': return 'Closed';
+    case 'byDesign': return 'By Design';
+    default: return 'Active';
+  }
+}
+
+function threadLabel(threadId: number, status?: ThreadStatus): string {
+  if (status) {
+    return `Thread #${threadId} · ${threadStatusLabel(status)}`;
+  }
+  return `Thread #${threadId}`;
+}
 
 interface StoredSuggestion {
   suggestedCode: string;
@@ -102,38 +132,41 @@ export class PrCommentController implements vscode.Disposable {
           existingThread.dispose();
 
           const vsThread = this._controller.createCommentThread(uri, range, vsComments);
-          vsThread.label = `Thread #${thread.id}`;
+          vsThread.label = threadLabel(thread.id, thread.status);
           vsThread.state = isResolvedThreadStatus(thread.status)
             ? vscode.CommentThreadState.Resolved
             : vscode.CommentThreadState.Unresolved;
           vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
-          vsThread.contextValue = vsThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
+          vsThread.contextValue = threadStatusContextValue(thread.status);
           vsThread.canReply = true;
-          (vsThread as unknown as { adoThreadId: number }).adoThreadId = thread.id;
+          (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoThreadId = thread.id;
+          (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoStatus = thread.status;
           this._threadMap.set(thread.id, vsThread);
         } else {
           // Update the existing thread object in-place to preserve any open reply
           // box — disposing and recreating it would clear unsaved reply text.
           existingThread.range = range;
           existingThread.comments = vsComments;
+          existingThread.label = threadLabel(thread.id, thread.status);
           existingThread.state = isResolvedThreadStatus(thread.status)
             ? vscode.CommentThreadState.Resolved
             : vscode.CommentThreadState.Unresolved;
-          existingThread.contextValue =
-            existingThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
+          existingThread.contextValue = threadStatusContextValue(thread.status);
+          (existingThread as unknown as { adoStatus: ThreadStatus }).adoStatus = thread.status;
         }
       } else {
         const vsThread = this._controller.createCommentThread(uri, range, vsComments);
-        vsThread.label = `Thread #${thread.id}`;
+        vsThread.label = threadLabel(thread.id, thread.status);
         vsThread.state = isResolvedThreadStatus(thread.status)
           ? vscode.CommentThreadState.Resolved
           : vscode.CommentThreadState.Unresolved;
         vsThread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
-        vsThread.contextValue = vsThread.state === vscode.CommentThreadState.Unresolved ? 'open' : 'resolved';
+        vsThread.contextValue = threadStatusContextValue(thread.status);
         vsThread.canReply = true;
 
-        // Store the ADO thread ID on the VS thread for later operations
-        (vsThread as unknown as { adoThreadId: number }).adoThreadId = thread.id;
+        // Store the ADO thread ID and current status on the VS thread for later operations
+        (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoThreadId = thread.id;
+        (vsThread as unknown as { adoThreadId: number; adoStatus: ThreadStatus }).adoStatus = thread.status;
 
         this._threadMap.set(thread.id, vsThread);
       }
@@ -189,23 +222,29 @@ export class PrCommentController implements vscode.Disposable {
     }
   }
 
-  /**
-   * Resolves a thread.
-   */
-  async resolveThread(vsThread: vscode.CommentThread): Promise<void> {
+  async setStatusActive(vsThread: vscode.CommentThread): Promise<void> {
+    await this.changeThreadStatus(vsThread, 'active');
+  }
+
+  async setStatusPending(vsThread: vscode.CommentThread): Promise<void> {
+    await this.changeThreadStatus(vsThread, 'pending');
+  }
+
+  async setStatusResolved(vsThread: vscode.CommentThread): Promise<void> {
     await this.changeThreadStatus(vsThread, 'fixed');
   }
 
-  /**
-   * Reopens a resolved thread.
-   */
-  async reopenThread(vsThread: vscode.CommentThread): Promise<void> {
-    await this.changeThreadStatus(vsThread, 'active');
+  async setStatusWontFix(vsThread: vscode.CommentThread): Promise<void> {
+    await this.changeThreadStatus(vsThread, 'wontFix');
+  }
+
+  async setStatusClosed(vsThread: vscode.CommentThread): Promise<void> {
+    await this.changeThreadStatus(vsThread, 'closed');
   }
 
   private async changeThreadStatus(
     vsThread: vscode.CommentThread,
-    status: 'active' | 'fixed'
+    status: ThreadStatus
   ): Promise<void> {
     if (!this._currentPr || !this._adoClient) {
       return;
@@ -216,10 +255,12 @@ export class PrCommentController implements vscode.Disposable {
     }
     try {
       await this._adoClient.updateThreadStatus(this._currentPr.pullRequestId, adoThreadId, status);
-      vsThread.state = status === 'active'
-        ? vscode.CommentThreadState.Unresolved
-        : vscode.CommentThreadState.Resolved;
-      vsThread.contextValue = status === 'active' ? 'open' : 'resolved';
+      vsThread.label = threadLabel(adoThreadId, status);
+      vsThread.state = isResolvedThreadStatus(status)
+        ? vscode.CommentThreadState.Resolved
+        : vscode.CommentThreadState.Unresolved;
+      vsThread.contextValue = threadStatusContextValue(status);
+      (vsThread as unknown as { adoStatus: ThreadStatus }).adoStatus = status;
     } catch (err) {
       vscode.window.showErrorMessage(`Azure DevOps PR Comments: Failed to update thread — ${String(err)}`);
     }
