@@ -117,16 +117,46 @@
     ],
     "menus": {
       "commandPalette": [
-        { "command": "azurePrComments.replyToThread", "when": "false" },
-        { "command": "azurePrComments.applySuggestion", "when": "false" },
-        { "command": "azurePrComments.resolveThread", "when": "false" },
-        { "command": "azurePrComments.reopenThread", "when": "false" },
-        { "command": "azurePrComments.setThreadStatus", "when": "false" },
-        { "command": "azurePrComments.setStatusActive", "when": "false" },
-        { "command": "azurePrComments.setStatusPending", "when": "false" },
-        { "command": "azurePrComments.setStatusResolved", "when": "false" },
-        { "command": "azurePrComments.setStatusWontFix", "when": "false" },
-        { "command": "azurePrComments.setStatusClosed", "when": "false" }
+        {
+          "command": "azurePrComments.replyToThread",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.applySuggestion",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.resolveThread",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.reopenThread",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.setThreadStatus",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.setStatusActive",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.setStatusPending",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.setStatusResolved",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.setStatusWontFix",
+          "when": "false"
+        },
+        {
+          "command": "azurePrComments.setStatusClosed",
+          "when": "false"
+        }
       ],
       "comments/commentThread/context": [
         {
@@ -143,11 +173,31 @@
         }
       ],
       "azurePrComments.statusMenu": [
-        { "command": "azurePrComments.setStatusActive",   "group": "1_unresolved@1", "when": "commentController == azurePrComments" },
-        { "command": "azurePrComments.setStatusPending",  "group": "1_unresolved@2", "when": "commentController == azurePrComments" },
-        { "command": "azurePrComments.setStatusResolved", "group": "2_resolved@1",   "when": "commentController == azurePrComments" },
-        { "command": "azurePrComments.setStatusWontFix",  "group": "2_resolved@2",   "when": "commentController == azurePrComments" },
-        { "command": "azurePrComments.setStatusClosed",   "group": "2_resolved@3",   "when": "commentController == azurePrComments" }
+        {
+          "command": "azurePrComments.setStatusActive",
+          "group": "1_unresolved@1",
+          "when": "commentController == azurePrComments"
+        },
+        {
+          "command": "azurePrComments.setStatusPending",
+          "group": "1_unresolved@2",
+          "when": "commentController == azurePrComments"
+        },
+        {
+          "command": "azurePrComments.setStatusResolved",
+          "group": "2_resolved@1",
+          "when": "commentController == azurePrComments"
+        },
+        {
+          "command": "azurePrComments.setStatusWontFix",
+          "group": "2_resolved@2",
+          "when": "commentController == azurePrComments"
+        },
+        {
+          "command": "azurePrComments.setStatusClosed",
+          "group": "2_resolved@3",
+          "when": "commentController == azurePrComments"
+        }
       ]
     },
     "configuration": {
