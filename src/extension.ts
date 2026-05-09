@@ -4,7 +4,11 @@ import { isResolvedThreadStatus } from './api/types.js';
 import { RepositoryDetector } from './git/repositoryDetector.js';
 import { AzureDevOpsApiError, AzureDevOpsClient } from './api/azureDevOpsClient.js';
 import { PrCommentController } from './comments/commentController.js';
-import { ThreadMapper, describeThreadLocation, type MappedThread } from './comments/threadMapper.js';
+import {
+  ThreadMapper,
+  describeThreadLocation,
+  type MappedThread,
+} from './comments/threadMapper.js';
 import { StatusBarManager } from './ui/statusBar.js';
 import { clearImageCache } from './comments/imageProcessor.js';
 
@@ -367,7 +371,10 @@ export function activate(context: vscode.ExtensionContext): void {
         const mappedThreads = mapper.mapThreads(threads, showResolved);
         output.appendLine(`Mapped threads: ${mappedThreads.length}`);
         for (const mappedThread of mappedThreads) {
-          output.appendLine(`  -> ${mappedThread.uri.fsPath}:${mappedThread.range.start.line + 1}`);
+          const location = mappedThread.range
+            ? `${mappedThread.uri.fsPath}:${mappedThread.range.start.line + 1}`
+            : `${mappedThread.uri.toString()} (Comments view only)`;
+          output.appendLine(`  -> ${location}`);
         }
 
         const renderedThreadsKey = buildRenderedThreadsKey(pr.pullRequestId, workspaceRoot, showResolved, mappedThreads);
@@ -467,10 +474,12 @@ function buildRenderedThreadsKey(
       id: thread.id,
       status: thread.status,
       uri: uri.toString(),
-      range: {
-        start: { line: range.start.line, character: range.start.character },
-        end: { line: range.end.line, character: range.end.character },
-      },
+      range: range
+        ? {
+            start: { line: range.start.line, character: range.start.character },
+            end: { line: range.end.line, character: range.end.character },
+          }
+        : undefined,
       comments: thread.comments.map((comment) => ({
         id: comment.id,
         content: comment.content,

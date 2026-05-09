@@ -5,23 +5,21 @@ import { resolveImages } from './imageProcessor.js';
 export interface MappedThread {
   thread: PullRequestThread;
   uri: vscode.Uri;
-  range: vscode.Range;
+  range: vscode.Range | undefined;
 }
 
 export class ThreadMapper {
   constructor(private readonly workspaceRoot: vscode.Uri) {}
 
   /**
-   * Maps PR threads to VS Code file URIs and line ranges.
-   * Skips threads without file context (e.g. PR-level comments).
+   * Maps PR threads to VS Code resources.
+   * Threads without file context are associated with the workspace root and an
+   * undefined range so they appear in the Comments view, not inline.
    */
   mapThreads(threads: PullRequestThread[], showResolved: boolean): MappedThread[] {
     const result: MappedThread[] = [];
 
     for (const thread of threads) {
-      if (!thread.threadContext?.filePath) {
-        continue;
-      }
       if (!showResolved && isResolvedThreadStatus(thread.status)) {
         continue;
       }
@@ -29,12 +27,21 @@ export class ThreadMapper {
         continue;
       }
 
-      const uri = this.resolveFileUri(thread.threadContext.filePath);
+      const uri = this.resolveThreadUri(thread);
       const range = this.buildRange(thread);
       result.push({ thread, uri, range });
     }
 
     return result;
+  }
+
+  private resolveThreadUri(thread: PullRequestThread): vscode.Uri {
+    const filePath = thread.threadContext?.filePath?.trim();
+    if (!filePath) {
+      return this.workspaceRoot;
+    }
+
+    return this.resolveFileUri(filePath);
   }
 
   /**
@@ -50,8 +57,12 @@ export class ThreadMapper {
    * Builds a VS Code Range from the thread's right-file position (feature branch side).
    * Falls back to line 0 if no position info is available.
    */
-  private buildRange(thread: PullRequestThread): vscode.Range {
+  private buildRange(thread: PullRequestThread): vscode.Range | undefined {
     const ctx = thread.threadContext;
+    if (!ctx?.filePath?.trim()) {
+      return undefined;
+    }
+
     if (!ctx?.rightFileStart) {
       return new vscode.Range(0, 0, 0, 0);
     }
@@ -101,7 +112,11 @@ export function formatDate(isoDate: string): string {
 }
 
 export function describeThreadLocation(thread: PullRequestThread): string {
-  const path = thread.threadContext?.filePath ?? '(no file)';
+  const path = thread.threadContext?.filePath?.trim();
+  if (!path) {
+    return `(pull request) [${thread.status}]`;
+  }
+
   const startLine = thread.threadContext?.rightFileStart?.line ?? 1;
   const endLine = thread.threadContext?.rightFileEnd?.line ?? startLine;
   return `${path}:${startLine}-${endLine} [${thread.status}]`;
